@@ -87,7 +87,13 @@ static int parse_opt(config_t* pxy_conf, int argc, char** argv)
 
 static int test_conf(config_t* pxy_conf)
 {
-
+	if(parse_conf(pxy_conf) != 0) {
+		printf("configuration file(%s) error:\nline: %d\nconf: %s\nemsg: %s\n\n",
+				pxy_conf->conf, pxy_conf->parse.line,
+				pxy_conf->parse.conf, pxy_conf->parse.error);
+		return -1;
+	}
+	printf("configure file ok\n\n");
 	return 0;
 }
 
@@ -105,7 +111,7 @@ int main(int argc, char **argv)
 		exit(0);
 	}
 	if(run_type == THINPXY_RUN_TEST) {
-		test_conf(&conf);
+		test_conf(conf);
 		exit(0);
 	}
 

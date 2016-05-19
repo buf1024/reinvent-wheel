@@ -14,8 +14,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include <netdb.h>
+
+#define DEF_IDLE_TO  60*60 /* 1 min */
+#define DEF_PXY_ALGO "default"
+
+#define LOG_INFO printf
+#define LOG_DEBUG printf
+#define LOG_ERROR printf
+
 
 typedef struct backend_s backend_t;
 typedef struct plugin_s plugin_t;
@@ -27,6 +36,18 @@ enum {
 	WORK_MODE_CONNECT_NEW,
 	WORK_MODE_CONNECT_EXIST,
 	WORK_MODE_CONNECT_PACKET,
+};
+
+enum {
+	CONN_TYPE_SERVER,
+	CONN_TYPE_CLIENT,
+};
+
+enum {
+	CONN_STATE_LISTENING,
+	CONN_STATE_CONNECTIN,
+	CONN_STATE_CONNECTED,
+	CONN_STATE_BROKEN,
 };
 
 struct plugin_s
@@ -41,8 +62,6 @@ struct plugin_s
 struct backend_s
 {
 	thinpxy_t* pxy;
-
-	int mode;
 
 	char* name;
 	char* addr_str;
@@ -67,7 +86,9 @@ struct backend_s
 
 struct connection_s
 {
-	thinpxy_t* pxy;
+	int fd;
+	int type;
+	int state;
 };
 
 struct config_s
@@ -84,6 +105,7 @@ struct config_s
 	struct {
 		int line;
 		char* error;
+		char* conf;
 	} parse;
 };
 
@@ -92,18 +114,24 @@ struct thinpxy_s
 	config_t config;
 
 	connection_t* conns;
+
+	int backend_cnt;
 	backend_t* backends;
 
 	int mode;
 	int idle_to;
 	char* pxy_algo;
 
+	char* plugin_name;
 	plugin_t* pxy_plugin;
 
-	int fd;
+	int listen_fd;
+	int epoll_fd;
 };
 
 int parse_conf(config_t* conf);
+
+int init_net(thinpxy_t* pxy);
 
 int coro_resume();
 int coro_yiled();
