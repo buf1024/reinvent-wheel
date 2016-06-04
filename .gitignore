@@ -1,6 +1,11 @@
 *~
 thind
 pxy
+
+logtest
+*.tmp
+*.log
+
 # Object files
 *.o
 *.ko
