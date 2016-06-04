@@ -19,6 +19,7 @@
 #define LOG_DEFAULT_HEAD_SIZE   128
 #define LOG_DEFAULT_BUFFER_SIZE 4096
 #define LOG_DEFAULT_MAX_PATH    256
+#define LOG_ONEDAY_SECONDS      86400
 
 #ifdef LOG_THREAD_SAFE
 
@@ -288,7 +289,7 @@ int log_init_file(int file_lvl,
     strncpy(_file_log_ctx.prefix, prefix, sizeof(_file_log_ctx.prefix) - 1);
     _file_log_ctx.buf_size = buf_size;
     _file_log_ctx.switch_size = sw_size;
-    _file_log_ctx.switch_time = sw_time;
+    _file_log_ctx.switch_time = sw_time % LOG_ONEDAY_SECONDS;
     _file_log_ctx.buf = malloc(sizeof(char)*buf_size);
     _file_log_ctx.level = file_lvl;
 
@@ -371,12 +372,12 @@ int log_file_switch()
 {
     int sw_log = 0;
 
-    if (_file_log_ctx.switch_time > 0) {
+    if (_file_log_ctx.switch_time >= 0) {
         struct timeval tv = { 0 };
         gettimeofday(&tv, NULL );
         struct tm* tm = localtime(&tv.tv_sec);
 
-        if(tm->tm_mday != _file_log_ctx.sw_day) {
+        if(tm->tm_mday != _file_log_ctx.sw_day && _file_log_ctx.sw_day != 0) {
             int seconds = tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
             if (seconds >= _file_log_ctx.switch_time) {
                 sw_log = 1;
