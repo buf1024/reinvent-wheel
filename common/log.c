@@ -377,11 +377,16 @@ int log_file_switch()
         gettimeofday(&tv, NULL );
         struct tm* tm = localtime(&tv.tv_sec);
 
-        if(tm->tm_mday != _file_log_ctx.sw_day && _file_log_ctx.sw_day != 0) {
+        if(_file_log_ctx.sw_day == 0) {
+            _file_log_ctx.sw_day = tm->tm_mday;
+        }
+
+        if(tm->tm_mday != _file_log_ctx.sw_day) {
             int seconds = tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
             if (seconds >= _file_log_ctx.switch_time) {
                 sw_log = 1;
                 _file_log_ctx.sw_day = tm->tm_mday;
+                _file_log_ctx.file_count = 0;
             }
         }
     }
