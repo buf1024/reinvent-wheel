@@ -72,9 +72,6 @@ static int log_file_msg(const char* log, int len);
 static int log_file_switch();
 static int log_file_init();
 static int log_console_msg(const char* log, int len);
-static int log_init_file(int file_lvl,
-        char* file_path, char* prefix, int buf_size,
-        int sw_time, int sw_size);
 static int log_get_header(int lvl, char* buf, int size);
 static void log_message(int lvl, const char* format, va_list ap);
 
@@ -288,6 +285,9 @@ int log_init_file(int file_lvl,
 
     strncpy(_file_log_ctx.prefix, prefix, sizeof(_file_log_ctx.prefix) - 1);
     _file_log_ctx.buf_size = buf_size;
+    if(_file_log_ctx.buf_size <= 0) {
+    	_file_log_ctx.buf_size = LOG_DEFAULT_BUFFER_SIZE;
+    }
     _file_log_ctx.switch_size = sw_size;
     _file_log_ctx.switch_time = sw_time % LOG_ONEDAY_SECONDS;
     _file_log_ctx.buf = malloc(sizeof(char)*buf_size);
@@ -370,29 +370,37 @@ int log_file_init()
 
 int log_file_switch()
 {
+    if(_file_log_ctx.switch_time < 0 && _file_log_ctx.switch_size <= 0) {
+        return LOG_SUCCESS;
+    }
     int sw_log = 0;
 
-    if (_file_log_ctx.switch_time >= 0) {
-        struct timeval tv = { 0 };
-        gettimeofday(&tv, NULL );
-        struct tm* tm = localtime(&tv.tv_sec);
+    struct timeval tv = { 0 };
+    gettimeofday(&tv, NULL );
+    struct tm* tm = localtime(&tv.tv_sec);
 
-        if(_file_log_ctx.sw_day == 0) {
-            _file_log_ctx.sw_day = tm->tm_mday;
-        }
+    if(_file_log_ctx.sw_day == 0) {
+        _file_log_ctx.sw_day = tm->tm_mday;
+    }
+
+    if (_file_log_ctx.switch_time >= 0) {
 
         if(tm->tm_mday != _file_log_ctx.sw_day) {
             int seconds = tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec;
             if (seconds >= _file_log_ctx.switch_time) {
                 sw_log = 1;
                 _file_log_ctx.sw_day = tm->tm_mday;
-                _file_log_ctx.file_count = 0;
+                _file_log_ctx.file_count = -1;
             }
         }
     }
     if (!sw_log) {
         if (_file_log_ctx.switch_size > 0
                 && _file_log_ctx.w_size >= _file_log_ctx.switch_size) {
+            if(_file_log_ctx.sw_day != tm->tm_mday) {
+                _file_log_ctx.sw_day = tm->tm_mday;
+                _file_log_ctx.file_count = -1;
+            }
             sw_log = 1;
         }
     }
@@ -425,6 +433,7 @@ int log_file_msg(const char* log, int len)
             _file_log_ctx.w_pos = 0;
         }
         _file_log_ctx.w_size += fwrite(log, 1, m_size, _file_log_ctx.fp);
+        fflush(fp);
     } else {
         memcpy(_file_log_ctx.buf + _file_log_ctx.w_pos, log, m_size);
         _file_log_ctx.w_pos += m_size;
