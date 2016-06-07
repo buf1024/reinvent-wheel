@@ -8,6 +8,10 @@
 #ifndef __CORO_H__
 #define __CORO_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
 	CORO_ABORT     = -1,
 	CORO_RESUME    = 0,
@@ -27,5 +31,8 @@ void* coro_data(coro_t* coro);
 
 int coro_free(coro_t* coro);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __CORO_H__ */
