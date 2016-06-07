@@ -17,13 +17,13 @@ extern "C" {
 typedef void sigfunc(int);
 sigfunc* set_signal(int signo, sigfunc* func, int interupt);
 
-int make_daemon();
-int is_prog_runas_root();
-int is_prog_running(const char* name);
+int daemonlize();
+int is_runas_root();
+int is_running(const char* name);
 int runas(const char* user);
 
-int write_pid_file(const char* file);
-int read_pid_file(pid_t* pid, const char* file);
+int write_pid(const char* file);
+int read_pid(pid_t* pid, const char* file);
 
 int match(const char* text, const char* pattern);
 

@@ -2,7 +2,7 @@
 thind
 pxy
 
-logtest
+*_test
 *.tmp
 *.log
 

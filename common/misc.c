@@ -43,7 +43,7 @@ sigfunc* set_signal(int signo, sigfunc* func, int interupt)
     return oact.sa_handler;
 }
 
-int make_daemon()
+int daemonlize()
 {
     if (fork() > 0) {
         exit(0);
@@ -55,7 +55,7 @@ int make_daemon()
     return 0;
 }
 
-int is_prog_runas_root()
+int is_runas_root()
 {
     if(getuid() == 0 || geteuid() == 0){
         return 1;
@@ -63,7 +63,7 @@ int is_prog_runas_root()
     return 0;
 }
 
-int is_prog_running(const char* name)
+int is_running(const char* name)
 {
     if(name == NULL || name[0] == 0) return -1;
 
@@ -139,7 +139,7 @@ int runas(const char* user)
     return 0;
 }
 
-int write_pid_file(const char* file)
+int write_pid(const char* file)
 {
     FILE* fp = fopen(file, "w");
     if(fp == NULL){
@@ -152,7 +152,7 @@ int write_pid_file(const char* file)
 
     return 0;
 }
-int read_pid_file(pid_t* pid, const char* file)
+int read_pid(pid_t* pid, const char* file)
 {
     FILE* fp = fopen(file, "r");
     if(fp == NULL){

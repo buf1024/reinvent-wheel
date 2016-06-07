@@ -305,16 +305,9 @@ int log_init_file(int file_lvl,
 int log_file_init()
 {
     FILE* fp = _file_log_ctx.fp;
-    char* rst = NULL;
-    int rst_size = 0;
     if(fp != NULL){
         if(_file_log_ctx.buf && _file_log_ctx.w_pos > 0) {
-            rst_size = _file_log_ctx.w_pos;
-            rst = (char*)malloc(_file_log_ctx.w_pos);
-            if(!rst) {
-                return LOG_FAIL;
-            }
-            memcpy(rst, _file_log_ctx.buf, _file_log_ctx.w_pos);
+            fwrite(_file_log_ctx.buf, 1, _file_log_ctx.w_pos, _file_log_ctx.fp);
         }
 
         fclose(fp);
@@ -359,11 +352,6 @@ int log_file_init()
         return LOG_FAIL;
     }
     _file_log_ctx.fp = fp;
-
-    if(rst) {
-        fwrite(rst, 1, rst_size, _file_log_ctx.fp);
-        free(rst);
-    }
 
     return LOG_SUCCESS;
 }
