@@ -274,15 +274,16 @@ int tcp_noblock_connect(char *addr, int port) {
 	return tcp_generic_connect(addr, port, true);
 }
 
-/* Like read(2) but make sure 'count' is read before to return
- * (unless error or EOF condition is encountered) */
-int tcp_read(int fd, char *buf, int count) {
+
+int tcp_read(int fd, char *buf, int count, bool* fd_broken) {
 	int nread, totlen = 0;
+	*fd_broken = false;
 	while (totlen != count) {
 		nread = read(fd, buf, count - totlen);
 		if (nread == 0) {
 			printf("recv data = 0, connection close, fd=%d\n", fd);
-			return totlen;
+			*fd_broken = true;
+			break;
 		}
 		if (nread == -1) {
 			if (errno == EINTR) {
@@ -291,7 +292,8 @@ int tcp_read(int fd, char *buf, int count) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				break;
 			}
-			return -1;
+			*fd_broken = true;
+			break;
 		}
 		totlen += nread;
 		buf += nread;
@@ -299,15 +301,15 @@ int tcp_read(int fd, char *buf, int count) {
 	return totlen;
 }
 
-/* Like write(2) but make sure 'count' is read before to return
- * (unless error is encountered) */
-int tcp_write(int fd, char *buf, int count) {
+int tcp_write(int fd, char *buf, int count, bool* fd_broken) {
 	int nwritten, totlen = 0;
+	*fd_broken = false;
 	while (totlen != count) {
 		nwritten = write(fd, buf, count - totlen);
 		if (nwritten == 0) {
 			printf("send data = 0, connection close, fd=%d\n", fd);
-			return totlen;
+			*fd_broken = true;
+			break;
 		}
 		if (nwritten == -1) {
 			if (errno == EINTR) {
@@ -316,8 +318,8 @@ int tcp_write(int fd, char *buf, int count) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				break;
 			}
-
-			return -1;
+			*fd_broken = true;
+			break;
 		}
 		totlen += nwritten;
 		buf += nwritten;

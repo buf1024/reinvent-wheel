@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "../sock.h"
 
 int main(int argc, char **argv) {
@@ -48,15 +49,19 @@ int main(int argc, char **argv) {
 		tcp_peer_name(cfd, peer_ip, sizeof(peer_ip), &peer_port);
 		printf("tcp_peer_name: ip = %s, port = %d\n", peer_ip, peer_port);
 
+		tcp_noblock(cfd, true);
 
 		char buf[1024] = {0};
 		while(1) {
-			int rd = tcp_read(cfd, buf, sizeof(buf) - 1);
+			bool fd_bro;
+			int rd = tcp_read(cfd, buf, sizeof(buf) - 1, &fd_bro);
 			if(rd > 0) {
 				printf("READ: \n%s\n", buf);
 				memset(buf, 0, rd);
-			}else{
-				printf("connection close\n");
+			}
+			if(fd_bro) {
+				close(cfd);
+				printf("connection close.\n");
 				break;
 			}
 		}
