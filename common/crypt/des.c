@@ -8,12 +8,8 @@
 #include "des.h"
 
 #include <string.h>
+#include <stdbool.h>
 
-#include <openssl/ossl_typ.h>
-#include <openssl/rsa.h>
-#include <openssl/bio.h>
-#include <openssl/pem.h>
-#include <openssl/err.h>
 #include <openssl/des.h>
 
 typedef struct des_ctx_s
@@ -25,6 +21,7 @@ typedef struct des_ctx_s
 }des_ctx_t;
 des_ctx_t* des_init(const char* k1, const char* k2, const char* k3)
 {
+
 	des_ctx_t* ctx = (des_ctx_t*)malloc(sizeof(*ctx));
 	if(!ctx) {
 		return NULL;
@@ -123,5 +120,6 @@ int desc_uninit(des_ctx_t* ctx)
 	if(ctx) {
 		free(ctx);
 	}
+
 	return 0;
 }

@@ -22,6 +22,8 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include <ctype.h>
+
 
 enum {
     MAX_PATH_LEN = 256,
@@ -165,6 +167,58 @@ int read_pid(pid_t* pid, const char* file)
 
     return 0;
 }
+
+// hash
+
+uint32_t murmur(unsigned char *data, size_t len)
+{
+    uint32_t h, k;
+
+    h = 0 ^ len;
+
+    while (len >= 4) {
+        k = data[0];
+        k |= data[1] << 8;
+        k |= data[2] << 16;
+        k |= data[3] << 24;
+
+        k *= 0x5bd1e995;
+        k ^= k >> 24;
+        k *= 0x5bd1e995;
+
+        h *= 0x5bd1e995;
+        h ^= k;
+
+        data += 4;
+        len -= 4;
+    }
+
+    switch (len) {
+    case 3:
+        h ^= data[2] << 16;
+        h ^= data[1] << 8;
+        h ^= data[0];
+        h *= 0x5bd1e995;
+        break;
+    case 2:
+        h ^= data[1] << 8;
+        h ^= data[0];
+        h *= 0x5bd1e995;
+        break;
+    case 1:
+        h ^= data[0];
+        h *= 0x5bd1e995;
+        break;
+    }
+
+    h ^= h >> 13;
+    h *= 0x5bd1e995;
+    h ^= h >> 15;
+
+    return h;
+}
+
+
 
 /*
  * Routine to see if a text string is matched by a wildcard pattern.
@@ -383,4 +437,54 @@ const char* trim(const char* text, const char* needle, char* dest, int size)
         return NULL;
     }
     return dest;
+}
+
+int get_hex(char ch)
+{
+    ch = (0x0f & ch);
+    if (ch >= 10) {
+        return 'a' + ch - 10;
+    }
+    return '0' + ch;
+}
+
+int to_hex(const char* src, size_t src_len, char* dst, size_t dst_len)
+{
+    if (dst_len < (src_len + src_len)) {
+        return -1; // buffer too small
+    }
+    size_t i = 0;
+    for (i = 0; i < src_len; i++) {
+        char ch = *(src + i);
+        dst[2 * i] = get_hex((char) ((0xf0 & ch) >> 4));
+        dst[2 * i + 1] = get_hex((char) (0x0f & ch));
+
+    }
+    return 0;
+}
+int to_upper(const char* src, size_t src_len, char* dst, size_t dst_len)
+{
+    if (dst_len < src_len) {
+        return -1; // buffer too small
+    }
+    while (src_len) {
+        *dst = toupper(*src);
+        dst++;
+        src++;
+        src_len--;
+    }
+    return 0;
+}
+int to_lower(const char* src, size_t src_len, char* dst, size_t dst_len)
+{
+    if (dst_len < src_len) {
+        return -1; // buffer too small
+    }
+    while (src_len) {
+        *dst = tolower(*src);
+        dst++;
+        src++;
+        src_len--;
+    }
+    return 0;
 }

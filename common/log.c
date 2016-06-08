@@ -75,8 +75,8 @@ static int log_console_msg(const char* log, int len);
 static int log_get_header(int lvl, char* buf, int size);
 static void log_message(int lvl, const char* format, va_list ap);
 
-static struct file_log  _file_log_ctx = { {0} };
-static struct console_log _console_log_ctx = { 0 };
+static struct file_log  _file_log_ctx;;
+static struct console_log _console_log_ctx;;
 
 int log_get_header(int lvl, char* buf, int size)
 {
@@ -261,7 +261,7 @@ int log_init(int con_lvl, int file_lvl,
 }
 
 
-int log_console_msg(const char* log, int len)
+int log_console_msg(const char* log, int len __attribute__((unused)))
 {
     printf("%s", log);
     return LOG_SUCCESS;

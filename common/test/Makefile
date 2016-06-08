@@ -3,11 +3,13 @@ CCFLAGS = -Wall -g -ggdb
 
 LOG_TEST=log_test
 CORO_TEST=coro_test
+SOCK_TEST=sock_test
 
-MYEXE=$(LOG_TEST) $(CORO_TEST)
+MYEXE=$(LOG_TEST) $(CORO_TEST) $(SOCK_TEST)
 
 MY_LOG_OBJ=logtest.o ../log.o
 MY_CORO_OBJ=corotest.o ../coro.o
+MY_SOCK_OBJ=socktest.o ../sock.o
 
 EXT_CCFLAGS = 
 
@@ -17,6 +19,9 @@ $(LOG_TEST):$(MY_LOG_OBJ)
 	$(CC) $(EXT_CCFLAGS) -o $@ $^
 
 $(CORO_TEST):$(MY_CORO_OBJ)
+	$(CC) $(EXT_CCFLAGS) -o $@ $^
+	
+$(SOCK_TEST):$(MY_SOCK_OBJ)
 	$(CC) $(EXT_CCFLAGS) -o $@ $^
 
 clean:

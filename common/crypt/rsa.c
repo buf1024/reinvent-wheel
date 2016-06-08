@@ -8,6 +8,7 @@
 #include "rsa.h"
 
 #include <string.h>
+#include <stdbool.h>
 
 #include <openssl/ossl_typ.h>
 #include <openssl/rsa.h>
@@ -121,7 +122,11 @@ static int rsa_verify(rsa_ctx_t* ctx, const EVP_MD *ev,
 
 rsa_ctx_t* rsa_init(const char* rsa_pub_key_file, const char* rsa_pri_key_file)
 {
-    OpenSSL_add_all_algorithms();
+	static bool algo = false;
+	if(!algo) {
+        OpenSSL_add_all_algorithms();
+        algo = true;
+	}
 
     rsa_ctx_t* ctx = (rsa_ctx_t*)malloc(sizeof(*ctx));
     if(!ctx) {
@@ -239,6 +244,13 @@ int rsa_uninit(rsa_ctx_t* ctx)
     if (ctx->evp_pub) {
         EVP_PKEY_free(ctx->evp_pub);
     }
+
+	static bool algo = false;
+	if(!algo) {
+		EVP_cleanup();
+        algo = true;
+	}
+
     return 0;
 }
 

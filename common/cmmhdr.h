@@ -49,6 +49,15 @@
     ((type *)((char *)(ptr) - offset(type, field)))
 #endif /* containerof */
 
+
+#define LF     ((unsigned char) 10)
+#define CR     ((unsigned char) 13)
+#define CRLF   "\x0d\x0a"
+
+#ifndef ABS
+#define ABS(a)       (((a) >= 0) ? (a) : - (a))
+#endif /*abs*/
+
 #ifndef MAX
 #define MAX(a, b) ((a)>(b)?(a):(b))
 #endif /* MAX */

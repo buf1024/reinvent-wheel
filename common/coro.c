@@ -39,6 +39,7 @@ coro_t* coro_new(coro_fun_t fun, void* data, int coro_stack)
 	coro_t* coro = (coro_t*)malloc(sizeof(*coro) + stack_size);
 	if (coro) {
 		memset(coro, 0, sizeof(*coro)); // leave stack
+		coro->data = data;
 
 		getcontext(&coro->context);
 
