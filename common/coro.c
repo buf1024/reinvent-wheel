@@ -79,10 +79,17 @@ int coro_yield_value(coro_t* coro, int value)
 	return coro->yield_value;
 }
 
-void* coro_data(coro_t* coro)
+void* coro_get_data(coro_t* coro)
 {
 	return coro->data;
 }
+
+
+void coro_set_data(coro_t* coro, void* data)
+{
+	coro->data = data;
+}
+
 int coro_free(coro_t* coro)
 {
 	free(coro);

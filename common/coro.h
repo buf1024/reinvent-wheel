@@ -27,7 +27,8 @@ coro_t* coro_new(coro_fun_t fun, void* data, int stack_size);
 int coro_resume(coro_t* coro);
 int coro_yield_value(coro_t* coro, int value);
 
-void* coro_data(coro_t* coro);
+void* coro_get_data(coro_t* coro);
+void coro_set_data(coro_t* coro, void* data);
 
 int coro_free(coro_t* coro);
 

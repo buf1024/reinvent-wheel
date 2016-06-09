@@ -30,12 +30,13 @@
         void __CCALL __##a##__##b##__ ## 520hjm(void);                       \
     __declspec(allocate(".CRT$XCU"))                                          \
     void (__CCALL * __ctor__##a##__##b##__ ## 520hjm)(void) =                \
-    __##a##__##b##__ ## 520hjm;
+    __##a##__##b##__ ## 520hjm;                                               \
+    void __CCALL __##a##__##b##__ ## no(void)
 
 #else
 
 #define __CCALL
-#define __CONSTRCT(a, b) __attribute__((constructor))
+#define __CONSTRCT(a, b) __attribute__((constructor)) void __##a##__##b##__ ## no(void)
 
 #endif /* c constructor _MSC_VER */
 

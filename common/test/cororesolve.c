@@ -1,11 +1,11 @@
 /*
- * logtest.c
+ * cororesolve.c
  *
- *  Created on: 2016/6/3
+ *  Created on: 2016/6/9
  *      Author: Luo Guochun
  */
 
-#include "../log.h"
+#include "sock-ext.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,44 +55,34 @@ static void sigusr2(int signo) {
 	g_usr2 = 1;
 }
 
+int biz(const char* host) {
+	coro_t* co = coro_new(tcp_noblock_resolve, 0, 0);
 
+	if(coro_resume(co) != CORO_FINISH) {
+
+	}
+
+}
 
 int main(int argc, char **argv) {
-	if(log_init(LOG_ALL, LOG_ALL,
-	        "./", "logtest", 1024*10,
-	        0, -1) != 0) {
-		printf("log_init failed.\n");
-		return -1;
-	}
 
     REGISTER_SIGNAL(SIGTERM, sigterm, 0);//Kill信号
     REGISTER_SIGNAL(SIGINT, sigterm, 0);//终端CTRL-C信号
     REGISTER_SIGNAL(SIGUSR2, sigusr2, 0);//SIGUSR2信号
 
-	srand(time(0));
-	long long times = 0LL;
-	while(1) {
-		times++;
-		LOG_DEBUG("this is a log test debug\n");
-		LOG_INFO("this is a log test info\n");
-		LOG_WARN("this is a log test warn\n");
-		LOG_ERROR("this is a log test error\n");
-		LOG_FATAL("this is a log test fatal\n");
-		LOG_INFO("--------- %lld --------------\n", times);
+    char addr[1024] = {0};
 
-		if(g_usr2) {
-			LOG_FLUSH();
-			g_usr2 = 0;
-		}
+    while(1) {
+    	printf("Input RESOV addr:\n");
+    	scanf("%s", addr);
 
-		if(g_term) {
-			break;
-		}
 
-		sleep(rand() % 60);
-	}
 
-	log_finish();
+    	coro_t* co = coro_new(tcp_noblock_resolve, 0, 0);
+
+    	coro_resume(co);
+    }
+
 
 	return 0;
 }
