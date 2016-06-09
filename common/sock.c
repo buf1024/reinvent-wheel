@@ -296,6 +296,40 @@ int tcp_read(int fd, char *buf, int count, bool* fd_broken) {
 	return totlen;
 }
 
+int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* fd_broken)
+{
+	int nread, ndlen, totlen = 0;
+	*fd_broken = false;
+	ndlen = strlen(needle);
+	while (totlen != count) {
+		nread = read(fd, buf, count - totlen);
+		if (nread == 0) {
+			printf("recv data = 0, connection close, fd=%d\n", fd);
+			*fd_broken = true;
+			break;
+		}
+		if (nread == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				break;
+			}
+			*fd_broken = true;
+			break;
+		}
+		totlen += nread;
+		buf += nread;
+
+		if(totlen >= ndlen) {
+			if(strncmp(buf + totlen - ndlen, needle, ndlen) == 0) {
+				break;
+			}
+		}
+	}
+	return totlen;
+}
+
 int tcp_write(int fd, char *buf, int count, bool* fd_broken) {
 	int nwritten, totlen = 0;
 	*fd_broken = false;
