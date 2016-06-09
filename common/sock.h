@@ -45,6 +45,9 @@ int unix_domain_server(char *path, mode_t perm, int backlog);
 int unix_domain_accept(int serversock);
 int unix_domain_connect(char *path);
 int unix_domain_noblock_connect(char *path);
+/*fd generated from socketpair function call*/
+ssize_t unix_domain_send_fd(int fd,/* void* ptr, size_t nbytes, */int sendfd);
+ssize_t unix_domain_recv_fd(int fd,/* void* ptr, size_t nbytes, */int* recvfd);
 
 #ifdef __cplusplus
 }
