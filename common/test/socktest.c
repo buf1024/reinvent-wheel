@@ -91,7 +91,7 @@ static int client_test()
 		return -1;
 	}
 
-	char packe[] = "GET /index.html HTTP/1.1\r\n"
+	char packe[] = "GET / HTTP/1.1\r\n"
 			"Host: www.baidu.com\n\n"
 			"Cache-Control: max-age=0\r\n"
 			"User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.116 Safari/537.36\r\n"
