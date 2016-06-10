@@ -6,7 +6,7 @@ ARFLAGS = -r -o
 
 RANDLIB = ranlib
 
-MYLIB=libmylib
+MYLIB=libmylib.a
 
 OBJS=$(patsubst %.c,%.o,$(wildcard *.c)) \
 	 $(patsubst %.c,%.o,$(wildcard ftp/*.c)) \

@@ -41,7 +41,7 @@ static int tcp_generic_resolve(char *host, char *ipbuf, size_t ipbuf_len,
 	hints.ai_socktype = SOCK_STREAM; /* specify socktype to avoid dups */
 
 	if ((rv = getaddrinfo(host, NULL, &hints, &info)) != 0) {
-		printf("%s", gai_strerror(rv));
+		printf("tcp_generic_resolve %s -> %s\n", host, gai_strerror(rv));
 		return -1;
 	}
 	if (info->ai_family == AF_INET) {
