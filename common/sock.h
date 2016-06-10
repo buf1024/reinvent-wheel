@@ -9,6 +9,8 @@
 #define __SOCK_H__
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C" {

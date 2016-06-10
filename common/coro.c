@@ -79,6 +79,17 @@ int coro_yield_value(coro_t* coro, int value)
 	return coro->yield_value;
 }
 
+int coro_get_state(coro_t* coro)
+{
+    return coro->yield_value;
+}
+int coro_set_state(coro_t* coro, int state)
+{
+    coro->yield_value = state;
+
+    return coro->yield_value;
+}
+
 void* coro_get_data(coro_t* coro)
 {
 	return coro->data;
