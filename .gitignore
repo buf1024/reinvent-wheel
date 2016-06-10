@@ -2,6 +2,7 @@
 thind
 pxy
 libmylib
+lazyproxyd
 
 *_test
 *.tmp
