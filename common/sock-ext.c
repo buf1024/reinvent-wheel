@@ -144,8 +144,6 @@ int tcp_noblock_resolve(coro_t* coro)
     }
 
     return coro_get_state(coro);
-
-    return 0;
 }
 resov_data_t* tcp_resolve_data(const char* host)
 {

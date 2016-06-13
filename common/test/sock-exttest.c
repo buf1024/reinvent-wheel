@@ -137,6 +137,9 @@ int main(int argc, char **argv) {
         }
         if(SLIST_EMPTY(&r)) break;
 
+        printf("sleep 1s, for iteration end.\n");
+        sleep(1);
+
         fflush(stdout);
     }
 
