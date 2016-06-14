@@ -76,19 +76,19 @@ int main(int argc, char **argv) {
 
     SLIST_INIT(&r);
 
-    resov_data_t* d = tcp_resolve_data("python.org");
+    resov_data_t* d = tcp_resolve_set_data("python.org", false);
     coro_t* c = coro_new(tcp_noblock_resolve, d, 0);
     resov_node_t* n = (resov_node_t*)malloc(sizeof(*n));
     n->coro = c;
     SLIST_INSERT_HEAD(&r, n, next);
 
-    d = tcp_resolve_data("baidu.com");
+    d = tcp_resolve_set_data("baidu.com", false);
     c = coro_new(tcp_noblock_resolve, d, 0);
     n = (resov_node_t*)malloc(sizeof(*n));
     n->coro = c;
     SLIST_INSERT_HEAD(&r, n, next);
 
-    d = tcp_resolve_data("aaagoogleyyasdf.com");
+    d = tcp_resolve_set_data("aaagoogleyyasdf.com", false);
     c = coro_new(tcp_noblock_resolve, d, 0);
     n = (resov_node_t*)malloc(sizeof(*n));
     n->coro = c;
@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
         char host[64] = {0};
         snprintf(host, sizeof(host) -1, "python%d.org", i);
 
-        d = tcp_resolve_data(host);
+        d = tcp_resolve_set_data(host, false);
         c = coro_new(tcp_noblock_resolve, d, 0);
         n = (resov_node_t*)malloc(sizeof(*n));
         n->coro = c;
@@ -107,6 +107,7 @@ int main(int argc, char **argv) {
     }
 
     while (1) {
+    	if(g_term) break;
         SLIST_FOREACH(n, &r, next) {
             coro_t* c = n->coro;
             int state = coro_get_state(c);
