@@ -19,8 +19,119 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
 
 #include "sock.h"
+
+
+#ifndef RESOLVE_THREAD_COUNT
+static const int __THREAD_COUNT = 4;
+#else
+static const int __THREAD_COUNT = RESOLVE_THREAD_COUNT;
+#endif
+
+#ifndef RESOLVE_SLEEP_TIME
+static const int __SLEEP_TIME = 3;
+#else
+static const int __SLEEP_TIME = RESOLVE_SLEEP_TIME;
+#endif
+
+#define RESOLVE_LOCK(l)   pthread_mutex_lock(l)
+#define RESOLVE_UNLOCK(l) pthread_mutex_unlock(l)
+
+typedef struct resov_thread_info_s
+{
+    pthread_mutex_t locker_req;
+    pthread_mutex_t locker_rst;
+    int fd_req[2];
+    int fd_rst[2];
+
+    int count;
+    pthread_t* thread;
+}resov_thread_info_t;
+
+static resov_thread_info_t* __resov = NULL;
+
+static int __put_resolve_data(resov_thread_info_t* t, resov_data_t* d)
+{
+    intptr_t ptr = (intptr_t)d;
+
+    int rv = write(t->fd_req[1], &ptr, sizeof(void*));
+    if(rv != sizeof(void*)) {
+        return -1;
+    }
+
+    return 0;
+}
+static resov_data_t* __get_resolve_data(resov_thread_info_t* t)
+{
+	resov_data_t* d = NULL;
+    intptr_t ptr = 0;
+
+    RESOLVE_LOCK(&t->locker_req);
+    int rv = read(t->fd_req[0], &ptr, sizeof(void*));
+    if(rv > 0) {
+        d = (resov_data_t*)ptr;
+    }
+    RESOLVE_UNLOCK(&t->locker_req);
+
+    return d;
+}
+static int __put_result_data(resov_thread_info_t* t, resov_data_t* d)
+{
+	intptr_t ptr = (intptr_t)d;
+	RESOLVE_LOCK(&t->locker_rst);
+	int rv = write(t->fd_rst[1], &ptr, sizeof(void*));
+	RESOLVE_UNLOCK(&t->locker_rst);
+
+	return rv;
+}
+
+static void* __resov_thread(void* d)
+{
+    resov_thread_info_t* t = (resov_thread_info_t*)d;
+
+    while (true) {
+        fd_set rd;
+        FD_ZERO(&rd);
+        FD_SET(t->fd_req[0], &rd);
+
+        struct timeval tv = { 0 };
+        tv.tv_sec = __SLEEP_TIME;
+        tv.tv_usec = 0;
+
+        int rv = select(t->fd_req[0] + 1, &rd, NULL, NULL, &tv);
+        if (rv > 0) {
+
+        	if(!FD_ISSET(t->fd_req[0], &rd)) {
+        		continue;
+        	}
+        	resov_data_t* reso = __get_resolve_data(t);
+            if (!reso)
+                continue;
+
+            printf("thread %ld start to resolve %s\n", pthread_self(), reso->host);
+
+            bool state = false;
+            if (tcp_resolve(reso->host, reso->addr, sizeof(reso->addr)) == 0) {
+            	state = true;
+            } else {
+            	state = false;
+            }
+            reso->resov = state;
+            __put_result_data(t, reso);
+        }else if(rv == 0) {
+            printf("thread %ld select timeout\n", pthread_self());
+        }else{
+            printf("thread %ld select error, errno = %d\n", pthread_self(), errno);
+            break;
+        }
+    }
+
+    return d;
+}
 
 /* tcp_generic_resolve() is called by tcp_resolve() and tcp_resolve_ip() to
  * do the actual work. It resolves the hostname "host" and set the string
@@ -225,6 +336,71 @@ static int unix_doman_generic_connect(char *path, bool noblock) {
 
 int tcp_resolve(char *host, char *ipbuf, size_t ipbuf_len) {
 	return tcp_generic_resolve(host, ipbuf, ipbuf_len, false);
+}
+
+int tcp_noblock_resolve(resov_data_t* resov)
+{
+	if (!__resov) {
+		__resov = (resov_thread_info_t*)malloc(sizeof(*__resov));
+		memset(__resov, 0, sizeof(*__resov));
+		pipe(__resov->fd_req);
+		pipe(__resov->fd_rst);
+		tcp_noblock(__resov->fd_rst[0], true);
+
+		__resov->count = resov->thread;
+		if(resov->thread < __THREAD_COUNT) {
+			__resov->count = __THREAD_COUNT;
+		}
+		__resov->thread = (pthread_t*)malloc(__resov->count * sizeof(pthread_t));
+
+
+		int i = 0;
+		for (i = 0; i < __resov->count; i++) {
+			pthread_t tid;
+			pthread_create(&tid, NULL, __resov_thread, __resov);
+			printf("thread %d started, thread id = %ld\n", i, tid);
+			__resov->thread[i] = tid;
+		}
+	}
+	if(resov->thread > __resov->count) {
+		int diff = resov->thread - __resov->count;
+		__resov->thread = realloc(__resov->thread, resov->thread * sizeof(pthread_t));
+		int i = 0;
+		for (i = 0; i < diff; i++) {
+			pthread_t tid;
+			pthread_create(&tid, NULL, __resov_thread, __resov);
+			printf("new thread %d started, thread id = %ld\n", i, tid);
+			__resov->thread[i + __resov->count] = tid;
+		}
+		__resov->count = resov->thread;
+	}
+
+	if (__put_resolve_data(__resov, resov) != 0) {
+		return -1;
+	}
+
+    return __resov->fd_rst[0];
+}
+int tcp_noblock_resolve_pollfd()
+{
+	int fd = -1;
+	if(__resov) {
+		fd = __resov->fd_rst[0];;
+	}
+	return fd;
+}
+resov_data_t* tcp_noblock_resolve_result()
+{
+	resov_data_t* reso = NULL;
+	int fd = tcp_noblock_resolve_pollfd();
+	if(fd < 0) return reso;
+
+	intptr_t ptr = 0;
+	int rv = read(fd, &ptr, sizeof(void*));
+	if(rv != sizeof(void*)) return reso;
+	reso = (resov_data_t*)ptr;
+
+	return reso;
 }
 
 int tcp_resolve_ip(char *host, char *ipbuf, size_t ipbuf_len) {

@@ -5,7 +5,7 @@
  *      Author: Luo Guochun
  */
 
-#include "sock-ext.h"
+#include "sock.h"
 #include "coro.h"
 #include "queue.h"
 
@@ -72,81 +72,68 @@ int main(int argc, char **argv) {
     REGISTER_SIGNAL(SIGINT, sigterm, 0);//终端CTRL-C信号
     REGISTER_SIGNAL(SIGUSR2, sigusr2, 0);//SIGUSR2信号
 
-    resov_t r;
 
-    SLIST_INIT(&r);
+    resov_data_t* d = NULL;
+    int fd = 0;
 
-    resov_data_t* d = tcp_resolve_set_data("python.org", false);
-    coro_t* c = coro_new(tcp_noblock_resolve, d, 0);
-    resov_node_t* n = (resov_node_t*)malloc(sizeof(*n));
-    n->coro = c;
-    SLIST_INSERT_HEAD(&r, n, next);
+    d = (resov_data_t*)malloc(sizeof(*d));
+    memset(d, 0, sizeof(*d));
+    strcpy(d->host, "python.org");
+    d->thread = 0;
+    fd = tcp_noblock_resolve(d);
 
-    d = tcp_resolve_set_data("baidu.com", false);
-    c = coro_new(tcp_noblock_resolve, d, 0);
-    n = (resov_node_t*)malloc(sizeof(*n));
-    n->coro = c;
-    SLIST_INSERT_HEAD(&r, n, next);
+    d = (resov_data_t*)malloc(sizeof(*d));
+    memset(d, 0, sizeof(*d));
+    strcpy(d->host, "baidu.com");
+    fd = tcp_noblock_resolve(d);
 
-    d = tcp_resolve_set_data("aaagoogleyyasdf.com", false);
-    c = coro_new(tcp_noblock_resolve, d, 0);
-    n = (resov_node_t*)malloc(sizeof(*n));
-    n->coro = c;
-    SLIST_INSERT_HEAD(&r, n, next);
+    d = (resov_data_t*)malloc(sizeof(*d));
+    memset(d, 0, sizeof(*d));
+    strcpy(d->host, "aaagoogleyyasdf.com");
+    d->thread = 6;
+    fd = tcp_noblock_resolve(d);
 
     int i=0;
     for(;i<100; i++) {
-        char host[64] = {0};
-        snprintf(host, sizeof(host) -1, "python%d.org", i);
 
-        d = tcp_resolve_set_data(host, false);
-        c = coro_new(tcp_noblock_resolve, d, 0);
-        n = (resov_node_t*)malloc(sizeof(*n));
-        n->coro = c;
-        SLIST_INSERT_HEAD(&r, n, next);
+        d = (resov_data_t*)malloc(sizeof(*d));
+        memset(d, 0, sizeof(*d));
+        snprintf(d->host, sizeof(d->host) -1, "python%d.org", i);
+        d->thread = 32;
+        fd = tcp_noblock_resolve(d);
     }
 
+    fd = tcp_noblock_resolve_pollfd();
     while (1) {
-    	if(g_term) break;
-        SLIST_FOREACH(n, &r, next) {
-            coro_t* c = n->coro;
-            int state = coro_get_state(c);
-            if(state == CORO_RESUME) {
-                coro_resume(c);
+        fd_set rd;
+        FD_ZERO(&rd);
+        FD_SET(fd, &rd);
+
+        struct timeval tv = { 0 };
+        tv.tv_sec = 3;
+        tv.tv_usec = 0;
+
+        int rv = select(fd + 1, &rd, NULL, NULL, &tv);
+        if (rv > 0) {
+
+        	if(!FD_ISSET(fd, &rd)) {
+        		continue;
+        	}
+        	resov_data_t* reso = tcp_noblock_resolve_result();
+        	if(!reso) continue;
+
+            if(reso->resov) {
+            	printf("resolve success: %s -> %s\n", reso->host, reso->addr);
             }else{
-                resov_data_t* d = (resov_data_t*)coro_get_data(c);
-
-                char host[64] = {0}, addr[64] = {0};
-
-                tcp_resolve_data_host(d, host);
-                tcp_resolve_data_addr(d, addr);
-
-                if(state == CORO_FINISH) {
-                    printf("state(%d) resolve, host %s  -> %s\n", state, host, addr);
-                }
-
-                if(state == CORO_ABORT) {
-                    printf("fail to resolve, host %s\n", host);
-                }
-                tcp_resolve_data_free(d);
-                coro_free(c);
-
-                SLIST_REMOVE(&r, n, resov_node_s, next);
-
-                free(n);
+            	printf("resolve failed : %s\n", reso->host);
             }
+        }else if(rv == 0) {
+            printf("select timeout\n");
+        }else{
+            printf("select error, errno = %d\n", errno);
+            break;
         }
-        if(SLIST_EMPTY(&r)) break;
-
-        printf("sleep 1s, for iteration end.\n");
-        sleep(1);
-
-        fflush(stdout);
     }
-
-    printf("sleep 60s\n");
-    sleep(60);
-
 
 	return 0;
 }
