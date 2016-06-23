@@ -7,12 +7,13 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "../coro.h"
 
 static int testfunc(coro_t* coro)
 {
 	int sim_block_times = 0;
-	const int BLOCK_STOP_TIME = 10;
+	const int BLOCK_STOP_TIME = 3;
 	while(1) {
 		sim_block_times++;
 		if(sim_block_times > BLOCK_STOP_TIME) {
@@ -27,16 +28,25 @@ static int testfunc(coro_t* coro)
 
 int main(int argc, char **argv)
 {
-	coro_t* co = coro_new(testfunc, NULL, 0);
+	coro_t* co1 = coro_new(testfunc, (void*)1, 0);
+	coro_t* co2 = coro_new(testfunc, (void*)1, 0);
 
-	int ret = CORO_RESUME;
+	char* buf = malloc(100);
 
-	while(ret != CORO_FINISH) {
-		coro_resume(co);
+	do {
+		if(coro_get_state(co1) != CORO_FINISH) {
+		    coro_resume(co1);
+		}
+		if(coro_get_state(co2) != CORO_FINISH) {
+		    coro_resume(co2);
+		}
 
 		printf("main sleep 1 seconds\n");
 		sleep(1);
-	}
+	}while(coro_get_state(co1) != CORO_FINISH && coro_get_state(co2) != CORO_FINISH);
+	free(buf);
+	coro_free(co1);
+	coro_free(co2);
 
 	return 0;
 }

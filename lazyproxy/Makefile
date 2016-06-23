@@ -1,17 +1,16 @@
 CC = cc
-CCFLAGS = -Wall -Wextra -g -ggdb -I../
+CCFLAGS = -Wall -Wextra -g -ggdb -I../common
 
 PROXY = lazyproxyd
 
-OBJS = main.o
+OBJS=$(patsubst %.c,%.o,$(wildcard *.c))
 
-
-EXT_CCFLAGS = -lpthread
+EXT_CCFLAGS = -L../common -lmylib -lpthread
 
 all:$(PROXY)
 
 $(PROXY):$(OBJS)
-	$(CC) $(EXT_CCFLAGS) -o $@ $^
+	$(CC) -o $@ $^ $(EXT_CCFLAGS) 
 
 clean:
 	rm -rf $(OBJS) 

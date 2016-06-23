@@ -446,14 +446,14 @@ int tcp_noblock_connect(char *addr, int port) {
 }
 
 
-int tcp_read(int fd, char *buf, int count, bool* fd_broken) {
+int tcp_read(int fd, char *buf, int count, bool* ok) {
 	int nread, totlen = 0;
-	*fd_broken = false;
+	*ok = true;
 	while (totlen != count) {
 		nread = read(fd, buf, count - totlen);
 		if (nread == 0) {
 			printf("recv data = 0, connection close, fd=%d\n", fd);
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		if (nread == -1) {
@@ -463,7 +463,7 @@ int tcp_read(int fd, char *buf, int count, bool* fd_broken) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				break;
 			}
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		totlen += nread;
@@ -472,16 +472,16 @@ int tcp_read(int fd, char *buf, int count, bool* fd_broken) {
 	return totlen;
 }
 
-int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* fd_broken)
+int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* ok)
 {
 	int nread, ndlen, totlen = 0;
-	*fd_broken = false;
+	*ok = true;
 	ndlen = strlen(needle);
 	while (totlen != count) {
 		nread = read(fd, buf, count - totlen);
 		if (nread == 0) {
 			printf("recv data = 0, connection close, fd=%d\n", fd);
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		if (nread == -1) {
@@ -491,7 +491,7 @@ int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* fd_b
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				break;
 			}
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		totlen += nread;
@@ -506,14 +506,14 @@ int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* fd_b
 	return totlen;
 }
 
-int tcp_write(int fd, char *buf, int count, bool* fd_broken) {
+int tcp_write(int fd, char *buf, int count, bool* ok) {
 	int nwritten, totlen = 0;
-	*fd_broken = false;
+	*ok = true;
 	while (totlen != count) {
 		nwritten = write(fd, buf, count - totlen);
 		if (nwritten == 0) {
 			printf("send data = 0, connection close, fd=%d\n", fd);
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		if (nwritten == -1) {
@@ -523,7 +523,7 @@ int tcp_write(int fd, char *buf, int count, bool* fd_broken) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				break;
 			}
-			*fd_broken = true;
+			*ok = false;
 			break;
 		}
 		totlen += nwritten;

@@ -1,0 +1,89 @@
+/*
+ * lazy.c
+ *
+ *  Created on: 2016/6/20
+ *      Author: Luo Guochun
+ */
+
+
+#include "lazy.h"
+
+int lazy_net_init(lazy_proxy_t* pxy)
+{
+	pxy->conn_size = MAX_CONCURRENT_CONN;
+	pxy->timout = MAX_EPOLL_TIMEOUT;
+	pxy->conn = malloc(sizeof(connection_t) * pxy->conn_size);
+	pxy->events = malloc(sizeof(struct epoll_event) * pxy->conn_size);
+	if(!pxy->conn || !pxy->events) {
+		LOG_ERROR("malloc failed, oom\n");
+		return -1;
+	}
+	memset(pxy->conn, 0, sizeof(connection_t) * pxy->conn_size);
+	memset(pxy->events, 0, sizeof(struct epoll_event) * pxy->conn_size);
+
+	char ipbuf[MAX_ADDR_SIZE] = {0};
+	if(tcp_resolve(pxy->host, ipbuf, sizeof(ipbuf)) != 0) {
+		LOG_ERROR("tcp_resolve failed, errno=%d\n", errno);
+		return -1;
+	}
+	pxy->listen = tcp_server(ipbuf, pxy->port, 128);
+	if(pxy->listen <= 0) {
+		LOG_ERROR("tcp_server failed, errno=%d\n", errno);
+		return -1;
+	}
+	connection_t* con = &pxy->conn[pxy->listen];
+	con->fd = pxy->listen;
+	con->type = CONN_TYPE_SERVER;
+	con->state = CONN_STATE_LISTENING;
+	con->coro = NULL;
+	con->pxy = pxy;
+
+	pxy->epfd = epoll_create1(EPOLL_CLOEXEC);
+	if(pxy->epfd <= 0) {
+		LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
+		return -1;
+	}
+
+	lazy_add_fd(pxy->epfd, con);
+
+	LOG_INFO("listening: host=%s, ip=%s, port=%d\n", pxy->host, ipbuf, pxy->port);
+
+	return 0;
+}
+int lazy_net_uninit(lazy_proxy_t* pxy)
+{
+	if(pxy) {
+		if(pxy->conn) {
+			free(pxy->conn);
+		}
+		if(pxy->events) {
+			free(pxy->events);
+		}
+	}
+	return 0;
+}
+
+int lazy_add_fd(int epfd, connection_t* con)
+{
+	struct epoll_event event;
+	event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
+	event.data.ptr = con;
+
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, con->fd, &event) != 0) {
+		LOG_ERROR("epoll add failed, errno=%d\n", errno);
+		return -1;
+	}
+	return 0;
+}
+int lazy_del_fd(int epfd, connection_t* con)
+{
+	struct epoll_event event;
+	event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
+	event.data.ptr = con;
+
+	if(epoll_ctl(epfd, EPOLL_CTL_DEL, con->fd, &event) != 0) {
+		LOG_ERROR("epoll del failed, errno=%d\n", errno);
+		return -1;
+	}
+	return 0;
+}

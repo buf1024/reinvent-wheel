@@ -4,6 +4,8 @@ pxy
 libmylib
 lazyproxyd
 
+core
+
 *_test
 *.tmp
 *.log

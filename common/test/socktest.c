@@ -54,13 +54,13 @@ static int server_test()
 
 		char buf[1024] = {0};
 		while(1) {
-			bool fd_bro;
-			int rd = tcp_read(cfd, buf, sizeof(buf) - 1, &fd_bro);
+			bool ok;
+			int rd = tcp_read(cfd, buf, sizeof(buf) - 1, &ok);
 			if(rd > 0) {
 				printf("READ: \n%s\n", buf);
 				memset(buf, 0, rd);
 			}
-			if(fd_bro) {
+			if(!ok) {
 				close(cfd);
 				printf("connection close.\n");
 				break;

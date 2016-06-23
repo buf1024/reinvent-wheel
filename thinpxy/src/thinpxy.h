@@ -37,11 +37,12 @@ enum {
 	WORK_MODE_CONNECT_EXIST,
 	WORK_MODE_CONNECT_PACKET,
 };
-
+#if 0
 enum {
 	CONN_TYPE_SERVER,
 	CONN_TYPE_CLIENT,
 };
+
 
 enum {
 	CONN_STATE_LISTENING,
@@ -49,6 +50,7 @@ enum {
 	CONN_STATE_CONNECTED,
 	CONN_STATE_BROKEN,
 };
+#endif
 
 struct plugin_s
 {

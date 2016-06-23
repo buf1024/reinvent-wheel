@@ -16,6 +16,16 @@
 extern "C" {
 #endif
 
+#define REGISTER_SIGNAL(signo, func, interupt)            \
+    do {                                                  \
+        if(set_signal(signo, func, interupt) == SIG_ERR){ \
+            printf("register signal %d failed:%s\n",      \
+                    signo, strerror(errno));              \
+            return -1;                                    \
+        }                                                 \
+    }while(0)
+
+
 typedef void sigfunc(int);
 sigfunc* set_signal(int signo, sigfunc* func, int interupt);
 

@@ -46,9 +46,9 @@ int tcp6_server(char *bindaddr, int port, int backlog);
 int tcp_accept(int serversock, char *ip, size_t ip_len, int *port);
 int tcp_connect(char *addr, int port);
 int tcp_noblock_connect(char *addr, int port);
-int tcp_read(int fd, char *buf, int count, bool* fd_broken);
-int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* fd_broken);
-int tcp_write(int fd, char *buf, int count, bool* fd_broken);
+int tcp_read(int fd, char *buf, int count, bool* ok);
+int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* ok);
+int tcp_write(int fd, char *buf, int count, bool* ok);
 int tcp_peer_name(int fd, char *ip, size_t ip_len, int *port);
 int tcp_sock_name(int fd, char *ip, size_t ip_len, int *port);
 
