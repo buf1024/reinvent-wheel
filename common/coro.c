@@ -18,6 +18,7 @@ enum {
 };
 
 struct coro_s {
+    bool new_tag;
 	coro_switcher_t* switcher;
 
 	ucontext_t context;
@@ -29,37 +30,54 @@ struct coro_s {
 };
 
 
-static void coro_entry(coro_t* coro, coro_fun_t fun) {
+static void __coro_entry(coro_t* coro, coro_fun_t fun) {
 	int value = fun(coro);
 	coro->call_end = true;
 	coro_yield_value(coro, value);
 }
 
-coro_t* coro_new(coro_switcher_t* switcher, coro_fun_t fun, void* data, int coro_stack) {
-	int stack_size = coro_stack <= 0 ? CORO_DEF_STACK_SIZE : coro_stack;
-	coro_t* coro = (coro_t*) malloc(sizeof(*coro) + stack_size);
-	if (coro) {
-		memset(coro, 0, sizeof(*coro)); // leave stack
-		coro->data = data;
-		coro->switcher = switcher;
+static coro_t* __coro_new(coro_switcher_t* switcher, bool new_tag,
+        coro_fun_t fun, void* data, int coro_stack) {
+    int stack_size = coro_stack <= 0 ? CORO_DEF_STACK_SIZE : coro_stack;
+    coro_t* coro = (coro_t*) malloc(sizeof(*coro) + stack_size);
+    if (coro) {
+        memset(coro, 0, sizeof(*coro)); // leave stack
+        coro->data = data;
+        coro->switcher = switcher;
+        coro->new_tag = new_tag;
 
-		getcontext(&coro->context);
+        getcontext(&coro->context);
 
-		unsigned char* stack = (unsigned char*) (coro + 1);
+        unsigned char* stack = (unsigned char*) (coro + 1);
 
-		coro->context.uc_stack.ss_flags = 0;
-		coro->context.uc_stack.ss_sp = (void*) stack;
-		coro->context.uc_stack.ss_size = stack_size;
-		coro->context.uc_link = NULL;
+        coro->context.uc_stack.ss_flags = 0;
+        coro->context.uc_stack.ss_sp = (void*) stack;
+        coro->context.uc_stack.ss_size = stack_size;
+        coro->context.uc_link = NULL;
 
-		makecontext(&coro->context, (void (*)()) coro_entry, 2, coro, fun);
-	}
-	return coro;
+        makecontext(&coro->context, (void (*)()) __coro_entry, 2, coro, fun);
+    }
+    return coro;
+}
+
+coro_t* coro_new(coro_fun_t fun, void* data, int coro_stack)
+{
+    coro_switcher_t* switcher = malloc(sizeof(coro_switcher_t));
+    if(!switcher) return NULL;
+
+    coro_t* coro = __coro_new(switcher, true, fun, data, coro_stack);
+    if(!coro) {
+        free(switcher);
+    }
+    return coro;
+}
+
+coro_t* coro_new2(coro_switcher_t* switcher, coro_fun_t fun, void* data, int coro_stack) {
+	return __coro_new(switcher, false, fun, data, coro_stack);
 }
 
 int coro_resume(coro_t* coro) {
 	assert(coro->call_end == false);
-	printf("coro_resume, coro=0x%x\n", coro);
 	if (swapcontext(&coro->switcher->caller, &coro->context) != 0) {
 		return CORO_ABORT;
 	}
@@ -71,8 +89,6 @@ int coro_resume(coro_t* coro) {
 }
 
 int coro_yield_value(coro_t* coro, int value) {
-
-	printf("coro_yield_value, coro=0x%x\n", coro);
 	coro->yield_value = value;
 	if (swapcontext(&coro->switcher->callee, &coro->switcher->caller) != 0) {
 		return CORO_ABORT;
@@ -98,7 +114,12 @@ void coro_set_data(coro_t* coro, void* data) {
 }
 
 int coro_free(coro_t* coro) {
-	free(coro);
+    if(coro) {
+        if(coro->new_tag) {
+            free(coro->switcher);
+        }
+        free(coro);
+    }
 	return CORO_FINISH;
 }
 

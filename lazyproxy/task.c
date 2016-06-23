@@ -9,7 +9,6 @@
 
 int lazy_proxy_task(lazy_proxy_t* pxy)
 {
-	coro_switcher_t switcher;
 	while (true) {
 		int rv = epoll_wait(pxy->epfd, pxy->events, pxy->conn_size, 1000);
 		if(rv == 0) {
@@ -75,7 +74,7 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 						LOG_ERROR("lazy_add_fd failed.\n");
 						close(fd);
 					}
-					lazy_spawn_coro(&switcher, con);
+					lazy_spawn_coro(con);
 					// TODO biz
 				}
 

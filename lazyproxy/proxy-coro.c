@@ -12,6 +12,7 @@ int resume_coro_demand(coro_t* coro)
 	if(coro == NULL) {
 		return CORO_FINISH;
 	}
+	LOG_DEBUG("resume_coro_demand start\n");
 	int state = coro_resume(coro);
 	if(state == CORO_ABORT || state == CORO_FINISH) {
 		connection_t* con = (connection_t*)coro_get_data(coro);
@@ -28,24 +29,24 @@ int resume_coro_demand(coro_t* coro)
 			con->state = CONN_STATE_CLOSING;
 			close(con->fd);
 			LOG_DEBUG("connection state = %d, coro=0x%x\n", con->state, con->coro);
-			//coro_free(con->coro);
-
-
+			coro_free(con->coro);
 		}
 	}
+	LOG_DEBUG("resume_coro_demand state = %d\n", state);
 
 	return state;
 }
 
 
 
-int lazy_spawn_coro(coro_switcher_t* switcher, connection_t* con)
+int lazy_spawn_coro(connection_t* con)
 {
 
 	if (!con->req) {
 		con->req = malloc(sizeof(http_req_t));
 		OOM_CHECK(con->req, "malloc(sizeof(http_req_t))");
 		con->req->buf = malloc(sizeof(buffer_t));
+		con->req->buf->buf = malloc(sizeof(char) * MAX_REQ_SIZE);
 		OOM_CHECK(con->req, "malloc(sizeof(buffer_t))");
 		con->req->header = dict_create(con);
 
@@ -54,7 +55,7 @@ int lazy_spawn_coro(coro_switcher_t* switcher, connection_t* con)
 	con->req->buf->cap = MAX_REQ_SIZE;
 	con->req->buf->size = 0;
 	dict_empty(con->req->header);
-	con->coro = coro_new(switcher, lazy_http_req_coro, con, 1024*100);
+	con->coro = coro_new(lazy_http_req_coro, con, 1024*100);
 
 	LOG_INFO("new http request, coro=0x%x\n", con->coro);
 
@@ -72,10 +73,6 @@ int lazy_http_req_coro(coro_t* coro)
 		bool ok = false;
 		int rd = tcp_read(con->fd, buf->buf + buf->size, 128, &ok);
 		if (rd > 0 && ok) {
-			buf->size += rd;
-			buf->buf[buf->size] = 0;
-			printf("RECV(%d) fd(%d): \n%s\n", buf->size, con->fd, buf->buf);
-			return CORO_FINISH;
 			if (buf->size + rd > buf->cap) {
 				// TODO
 			}
@@ -86,10 +83,12 @@ int lazy_http_req_coro(coro_t* coro)
 				printf("RECV(%d) fd(%d): \n%s\n", buf->size, con->fd, buf->buf);
 				return CORO_FINISH;
 			}
+			LOG_DEBUG("coro_yield_value 1\n");
 			coro_yield_value(coro, CORO_RESUME);
 			continue;
 		}
 		if (ok && rd == 0) {
+		    LOG_DEBUG("coro_yield_value 2\n");
 			coro_yield_value(coro, CORO_RESUME);
 			continue;
 		}

@@ -123,7 +123,7 @@ int lazy_del_fd(int epfd, connection_t* con);
 int lazy_proxy_task(lazy_proxy_t* pxy);
 int lazy_timer_task(lazy_proxy_t* pxy);
 
-int lazy_spawn_coro(coro_switcher_t* switcher, connection_t* con);
+int lazy_spawn_coro(connection_t* con);
 int resume_coro_demand(coro_t* coro);
 int lazy_http_req_coro(coro_t* coro);
 
