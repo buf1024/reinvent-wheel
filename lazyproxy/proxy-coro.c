@@ -12,7 +12,6 @@ int resume_coro_demand(coro_t* coro)
 	if(coro == NULL) {
 		return CORO_FINISH;
 	}
-	LOG_DEBUG("resume_coro_demand start\n");
 	int state = coro_resume(coro);
 	if(state == CORO_ABORT || state == CORO_FINISH) {
 		connection_t* con = (connection_t*)coro_get_data(coro);
@@ -32,7 +31,6 @@ int resume_coro_demand(coro_t* coro)
 			coro_free(con->coro);
 		}
 	}
-	LOG_DEBUG("resume_coro_demand state = %d\n", state);
 
 	return state;
 }
@@ -65,11 +63,8 @@ int lazy_http_req_coro(coro_t* coro)
 {
 	connection_t* con = (connection_t*)coro_get_data(coro);
 	buffer_t* buf = con->req->buf;
-	int i = 0;
-//#if 0
+
 	do {
-		i++;
-		//if(i == 5) return CORO_FINISH;
 		bool ok = false;
 		int rd = tcp_read(con->fd, buf->buf + buf->size, 128, &ok);
 		if (rd > 0 && ok) {
@@ -80,21 +75,18 @@ int lazy_http_req_coro(coro_t* coro)
 			char* pos = strstr(buf->buf, "\r\n\r\n");
 			if (pos != NULL) {
 				buf->buf[buf->size] = 0;
-				printf("RECV(%d) fd(%d): \n%s\n", buf->size, con->fd, buf->buf);
+				LOG_DEBUG("RECV(%d) fd(%d): \n%s\n", buf->size, con->fd, buf->buf);
 				return CORO_FINISH;
 			}
-			LOG_DEBUG("coro_yield_value 1\n");
 			coro_yield_value(coro, CORO_RESUME);
 			continue;
 		}
 		if (ok && rd == 0) {
-		    LOG_DEBUG("coro_yield_value 2\n");
 			coro_yield_value(coro, CORO_RESUME);
 			continue;
 		}
 		return CORO_ABORT;
 	} while (true);
-//#endif
 
 	return CORO_FINISH;
 }
