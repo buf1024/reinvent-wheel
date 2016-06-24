@@ -44,7 +44,7 @@ int lazy_net_init(lazy_proxy_t* pxy)
 		return -1;
 	}
 
-	lazy_add_fd(pxy->epfd, con);
+	lazy_add_fd(pxy->epfd, EPOLLIN|EPOLLOUT, con);
 
 	LOG_INFO("listening: host=%s, ip=%s, port=%d\n", pxy->host, ipbuf, pxy->port);
 
@@ -63,10 +63,10 @@ int lazy_net_uninit(lazy_proxy_t* pxy)
 	return 0;
 }
 
-int lazy_add_fd(int epfd, connection_t* con)
+int lazy_add_fd(int epfd, int evt, connection_t* con)
 {
 	struct epoll_event event;
-	event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
+	event.events = evt | EPOLLERR;
 	event.data.ptr = con;
 
 	if(epoll_ctl(epfd, EPOLL_CTL_ADD, con->fd, &event) != 0) {
@@ -75,11 +75,24 @@ int lazy_add_fd(int epfd, connection_t* con)
 	}
 	return 0;
 }
+
+
+int lazy_mod_fd(int epfd, int evt, connection_t* con)
+{
+	struct epoll_event event;
+	event.events = evt | EPOLLERR;
+	event.data.ptr = con;
+
+	if(epoll_ctl(epfd, EPOLL_CTL_MOD, con->fd, &event) != 0) {
+		LOG_ERROR("epoll add failed, errno=%d\n", errno);
+		return -1;
+	}
+	return 0;
+}
+
 int lazy_del_fd(int epfd, connection_t* con)
 {
 	struct epoll_event event;
-	event.events = EPOLLIN | EPOLLOUT | EPOLLERR;
-	event.data.ptr = con;
 
 	if(epoll_ctl(epfd, EPOLL_CTL_DEL, con->fd, &event) != 0) {
 		LOG_ERROR("epoll del failed, errno=%d\n", errno);

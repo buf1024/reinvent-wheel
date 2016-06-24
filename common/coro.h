@@ -35,6 +35,8 @@ typedef int (*coro_fun_t)(coro_t* coro);
 coro_t* coro_new(coro_fun_t fun, void* data, int stack_size);
 coro_t* coro_new2(coro_switcher_t* switcher, coro_fun_t fun, void* data, int stack_size);
 
+int coro_reset(coro_t* coro);
+
 int coro_resume(coro_t* coro);
 int coro_yield_value(coro_t* coro, int value);
 

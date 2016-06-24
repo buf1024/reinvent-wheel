@@ -34,8 +34,6 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 				struct epoll_event* ev = &(pxy->events[i]);
 				connection_t* con = (connection_t*)ev->data.ptr;
 
-				if((ev->events & EPOLLIN) !=  EPOLLIN) continue;
-
 				if(con->state == CONN_STATE_LISTENING) {
 					char addr[MAX_ADDR_SIZE] = {0};
 					int port = 0;
@@ -50,14 +48,11 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 					tcp_noblock(fd, true);
 
 					if(fd >= pxy->conn_size) {
-						int grow = MAX_CONCURRENT_CONN/4;
+						int grow = MAX_CONCURRENT_CONN_GROW;
 						pxy->conn = realloc(pxy->conn, sizeof(connection_t) * (pxy->conn_size + grow));
+						OOM_CHECK(pxy->conn, "realloc(pxy->conn, sizeof(connection_t) * (pxy->conn_size + grow))");
 						pxy->events = realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow));
-						if(!pxy->conn || !pxy->events) {
-							LOG_ERROR("realloc oom! size = %d\n", pxy->conn_size);
-							log_finish();
-							abort();
-						}
+						OOM_CHECK(pxy->events, "realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow))");
 						memset(pxy->conn + pxy->conn_size, 0, sizeof(connection_t) * grow);
 						memset(pxy->events + pxy->conn_size, 0, sizeof(struct epoll_event) * grow);
 
@@ -70,7 +65,7 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 					con->state = CONN_STATE_CONNECTED;
 					con->pxy = pxy;
 
-					if(lazy_add_fd(pxy->epfd, con) < 0) {
+					if(lazy_add_fd(pxy->epfd, EPOLLIN, con) < 0) {
 						LOG_ERROR("lazy_add_fd failed.\n");
 						close(fd);
 					}
@@ -84,8 +79,10 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 				if(con->state == CONN_STATE_CONNECTING) {
 
 				}
-
 				if(con->state == CONN_STATE_CLOSING) {
+					lazy_del_fd(con->pxy->epfd, con);
+					con->state = CONN_STATE_CLOSED;
+					//close(con->fd);
 				}
 
 			}
