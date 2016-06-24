@@ -43,6 +43,7 @@
 #define HTTP_CONNECT "CONNECT"
 
 #define HTTP_CONTENT_LEN  "Content-Length"
+#define HTTP_METHOD_KEY "HTTP_METHOD"
 
 enum {
 	MAX_HOST_SIZE       = 256,

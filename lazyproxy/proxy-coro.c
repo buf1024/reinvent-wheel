@@ -115,6 +115,18 @@ int process_http_req(coro_t* coro)
 				coro_yield_value(coro, CORO_RESUME);
 				continue;
 			}
+
+			LOG_DEBUG("req done\n%s\n", buf->cache);
+			dict_iterator* it = dict_get_safe_iterator(req->header);
+			dict_entry* de = NULL;
+			while((de = dict_next(it)) != NULL) {
+			    char* k = (char*)de->key;
+			    char* v = (char*)de->val;
+
+			    LOG_DEBUG("%s: %s\n", k, v);
+			}
+			dict_release_iterator(it);
+
 			break; // READ DONE
 
 		}
@@ -145,11 +157,11 @@ int parse_http_req(http_req_t* req)
 		return 0;
 	}
 
-	if(strncmp(HTTP_GET, buf->cache, sizeof(HTTP_GET)) == 0) {
+	if(strncmp(HTTP_GET, buf->cache, sizeof(HTTP_GET) - 1) == 0) {
 		req->method = HTTP_METHORD_GET;
-	}else if(strncmp(HTTP_POST, buf->cache, sizeof(HTTP_POST)) == 0) {
+	}else if(strncmp(HTTP_POST, buf->cache, sizeof(HTTP_POST) - 1) == 0) {
 		req->method = HTTP_METHORD_POST;
-	}else if(strncmp(HTTP_CONNECT, buf->cache, sizeof(HTTP_CONNECT)) == 0) {
+	}else if(strncmp(HTTP_CONNECT, buf->cache, sizeof(HTTP_CONNECT) - 1) == 0) {
 		req->method = HTTP_METHORD_CONNECT;
 	}else{
 		LOG_ERROR("unknown http method, req = \n%s\n", buf->cache);
@@ -168,7 +180,7 @@ int parse_http_req(http_req_t* req)
 	}
 
 
-	start += sizeof(CRLF);
+	start += (sizeof(CRLF) - 1);
 	char* end = pos - 1;
 
 	while(start < end) {
@@ -176,21 +188,20 @@ int parse_http_req(http_req_t* req)
 		if(!pos) {
 			char head[end - start + 1];
 			memcpy(head, start, end - start);
-			LOG_DEBUG("head: %s\n", head);
+			head[end - start] = 0;
 			if(parse_req_head(req, head, end - start) != 0) {
 				LOG_ERROR("parse_req_head failed.\n");
 				return -1;
 			}
 			break;
 		}else{
-			char head[pos - start - sizeof(CRLF)];
+			char head[pos - start + 1];
 			memcpy(head, start, pos - start);
-			LOG_DEBUG("head: %s\n", head);
 			if(parse_req_head(req, head, pos - start) != 0) {
 				LOG_ERROR("parse_req_head failed.\n");
 				return -1;
 			}
-			start = pos + sizeof(CRLF);
+			start = pos + sizeof(CRLF) - 1;
 		}
 	}
 
@@ -199,6 +210,7 @@ int parse_http_req(http_req_t* req)
 
 int parse_req_method(http_req_t* req, const char* head, int size)
 {
+#if 0
 	const char* pos = strchr(head, ' ');
 	if(pos == NULL) {
 		return -1;
@@ -219,12 +231,28 @@ int parse_req_method(http_req_t* req, const char* head, int size)
 		return -1;
 	}
 	int* k = malloc(sizeof(*k));
-	int* v = malloc(end - pos);
+	char* v = malloc(end - pos + 1);
 
 	*k = req->method;
 	memcpy(v, pos, end - pos);
+	v[end-pos] = 0;
 
-	if(dict_add(req->header, k, sizeof(*k), v, end - pos) != DICT_OK) {
+    if(dict_add(req->header, k, sizeof(*k), v, end - pos) != DICT_OK) {
+        free(k);free(v);
+        LOG_ERROR("dict add failed.\n");
+        return -1;
+    }
+
+#endif
+
+	char* k = malloc(sizeof(HTTP_METHOD_KEY));
+	char* v = malloc(size + 1);
+
+	memcpy(k, HTTP_METHOD_KEY, sizeof(HTTP_METHOD_KEY));
+	memcpy(v, head, size);
+	v[size] = 0;
+
+	if(dict_add(req->header, k, sizeof(HTTP_METHOD_KEY), v,  size + 1) != DICT_OK) {
 		free(k);free(v);
 		LOG_ERROR("dict add failed.\n");
 		return -1;
@@ -243,14 +271,16 @@ int parse_req_head(http_req_t* req, const char* head, int size)
 	if(!pos) {
 		return -1;
 	}
-	const char* end = pos;
+	const char* end = pos - 1;
 	while(end >= head) {
 		if(isspace(*end)) {
 			end--;
 		}else{
-			k_s = end - head;
+			k_s = end - head + 2;
 			k = malloc(k_s);
 			memcpy(k, head, k_s);
+			k[k_s - 1] = 0;
+			break;
 		}
 	}
 	if(!k) {
@@ -263,13 +293,15 @@ int parse_req_head(http_req_t* req, const char* head, int size)
 		if(isspace(*end)) {
 			end++;
 		}else{
-			v_s = head + size - end;
+			v_s = head + size - end + 1;
 			v = malloc(v_s);
 			memcpy(v, end, v_s);
+			v[v_s - 1] = 0;
+			break;
 		}
 	}
 
-	if(!k) {
+	if(!v) {
 		LOG_ERROR("invalid value\n", head);
 		return -1;
 	}
