@@ -13,13 +13,12 @@ int lazy_net_init(lazy_proxy_t* pxy)
 	pxy->conn_size = MAX_CONCURRENT_CONN;
 	pxy->timout = MAX_EPOLL_TIMEOUT;
 	pxy->conn = malloc(sizeof(connection_t) * pxy->conn_size);
+	OOM_CHECK(pxy->conn, "malloc(sizeof(connection_t) * pxy->conn_size)");
 	pxy->events = malloc(sizeof(struct epoll_event) * pxy->conn_size);
-	if(!pxy->conn || !pxy->events) {
-		LOG_ERROR("malloc failed, oom\n");
-		return -1;
-	}
+    OOM_CHECK(pxy->events, "malloc(sizeof(struct epoll_event) * pxy->conn_size)");
 	memset(pxy->conn, 0, sizeof(connection_t) * pxy->conn_size);
-	memset(pxy->events, 0, sizeof(struct epoll_event) * pxy->conn_size);
+    memset(pxy->events, 0, sizeof(struct epoll_event) * pxy->conn_size);
+
 
 	char ipbuf[MAX_ADDR_SIZE] = {0};
 	if(tcp_resolve(pxy->host, ipbuf, sizeof(ipbuf)) != 0) {
@@ -35,8 +34,6 @@ int lazy_net_init(lazy_proxy_t* pxy)
 	con->fd = pxy->listen;
 	con->type = CONN_TYPE_SERVER;
 	con->state = CONN_STATE_LISTENING;
-	con->coro = NULL;
-	con->pxy = pxy;
 
 	pxy->epfd = epoll_create1(EPOLL_CLOEXEC);
 	if(pxy->epfd <= 0) {

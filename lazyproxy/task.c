@@ -53,6 +53,7 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 						OOM_CHECK(pxy->conn, "realloc(pxy->conn, sizeof(connection_t) * (pxy->conn_size + grow))");
 						pxy->events = realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow));
 						OOM_CHECK(pxy->events, "realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow))");
+					    OOM_CHECK(pxy->events, "mrealloc(pxy->coro, sizeof(coro_t*) * (pxy->conn_size + grow)");
 						memset(pxy->conn + pxy->conn_size, 0, sizeof(connection_t) * grow);
 						memset(pxy->events + pxy->conn_size, 0, sizeof(struct epoll_event) * grow);
 
@@ -74,15 +75,21 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 				}
 
 				if(con->state == CONN_STATE_CONNECTED) {
-					resume_coro_demand(con->coro);
+				    LOG_DEBUG("connected fd=%d\n", con->fd);
+					resume_coro_demand(con->http_pxy->coro);
 				}
 				if(con->state == CONN_STATE_CONNECTING) {
-
+                    LOG_DEBUG("connection fd=%d\n", con->fd);
+                    resume_coro_demand(con->http_pxy->coro);
 				}
 				if(con->state == CONN_STATE_CLOSING) {
 					lazy_del_fd(con->pxy->epfd, con);
 					con->state = CONN_STATE_CLOSED;
 					//close(con->fd);
+				}
+				if(con->state == CONN_STATE_RESOLVING) {
+				    resov_data_t* d = tcp_noblock_resolve_result();
+				    resume_coro_demand((coro_t*)d->data);
 				}
 
 			}

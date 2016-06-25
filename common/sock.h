@@ -33,6 +33,7 @@ struct resov_data_s
     char addr[RESOLV_ADDR_SIZE];
     int  thread;
     bool resov;;
+    void* data;
 };
 
 // tcp

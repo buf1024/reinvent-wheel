@@ -27,7 +27,7 @@
 
 
 #ifndef RESOLVE_THREAD_COUNT
-static const int __THREAD_COUNT = 4;
+static const int __THREAD_COUNT = 1;
 #else
 static const int __THREAD_COUNT = RESOLVE_THREAD_COUNT;
 #endif
@@ -123,9 +123,9 @@ static void* __resov_thread(void* d)
             reso->resov = state;
             __put_result_data(t, reso);
         }else if(rv == 0) {
-            printf("thread %ld select timeout\n", pthread_self());
+            //printf("thread %ld select timeout\n", pthread_self());
         }else{
-            printf("thread %ld select error, errno = %d\n", pthread_self(), errno);
+            //printf("thread %ld select error, errno = %d\n", pthread_self(), errno);
             break;
         }
     }
@@ -362,22 +362,26 @@ int tcp_noblock_resolve(resov_data_t* resov)
 			__resov->thread[i] = tid;
 		}
 	}
-	if(resov->thread > __resov->count) {
-		int diff = resov->thread - __resov->count;
-		__resov->thread = realloc(__resov->thread, resov->thread * sizeof(pthread_t));
-		int i = 0;
-		for (i = 0; i < diff; i++) {
-			pthread_t tid;
-			pthread_create(&tid, NULL, __resov_thread, __resov);
-			printf("new thread %d started, thread id = %ld\n", i, tid);
-			__resov->thread[i + __resov->count] = tid;
-		}
-		__resov->count = resov->thread;
-	}
 
-	if (__put_resolve_data(__resov, resov) != 0) {
-		return -1;
-	}
+    if (resov) {
+        if (resov->thread > __resov->count) {
+            int diff = resov->thread - __resov->count;
+            __resov->thread = realloc(__resov->thread,
+                    resov->thread * sizeof(pthread_t));
+            int i = 0;
+            for (i = 0; i < diff; i++) {
+                pthread_t tid;
+                pthread_create(&tid, NULL, __resov_thread, __resov);
+                printf("new thread %d started, thread id = %ld\n", i, tid);
+                __resov->thread[i + __resov->count] = tid;
+            }
+            __resov->count = resov->thread;
+        }
+
+        if (__put_resolve_data(__resov, resov) != 0) {
+            return -1;
+        }
+    }
 
     return __resov->fd_rst[0];
 }

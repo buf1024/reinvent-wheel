@@ -45,6 +45,8 @@
 #define HTTP_CONTENT_LEN  "Content-Length"
 #define HTTP_METHOD_KEY "HTTP_METHOD"
 
+#define HTTP_HOST    "Host"
+
 enum {
 	MAX_HOST_SIZE       = 256,
 	MAX_ADDR_SIZE       = 16,
@@ -55,8 +57,8 @@ enum {
 };
 
 enum {
-	MAX_CONCURRENT_CONN      = 1024,
-	MAX_CONCURRENT_CONN_GROW = 256,
+	MAX_CONCURRENT_CONN      = 256,
+	MAX_CONCURRENT_CONN_GROW = 64,
 	MAX_EPOLL_TIMEOUT        = 1000,
 };
 
@@ -72,6 +74,7 @@ enum {
 	CONN_STATE_BROKEN,
 	CONN_STATE_CLOSING,
 	CONN_STATE_CLOSED,
+	CONN_STATE_RESOLVING,
 };
 
 enum {
@@ -81,11 +84,15 @@ enum {
 	HTTP_METHORD_CONNECT,
 };
 
+enum {
+    HTTP_SSL_PORT = 443,
+    HTTP_PORT     = 80,
+};
+
 typedef struct connection_s connection_t;
-typedef struct http_req_s http_req_t;
-typedef struct http_rsp_s http_rsp_t;
 typedef struct lazy_proxy_s lazy_proxy_t;
 typedef struct buffer_s buffer_t;
+typedef struct http_proxy_s http_proxy_t;
 
 struct lazy_proxy_s
 {
@@ -101,44 +108,48 @@ struct lazy_proxy_s
 
 	int epfd;
 	int timout;
+
 	int conn_size;
 	connection_t* conn;
 	struct epoll_event* events;
+
+	connection_t* dns_rsv_con;
+	coro_switcher_t switcher;
 };
 
 struct connection_s
 {
-	lazy_proxy_t* pxy;
+    lazy_proxy_t* lazy;
 
 	int fd;
 	int type;
 	int state;
 
-	http_req_t* req;
-	coro_t* coro;
+	http_proxy_t* pxy;
 };
 
 struct buffer_s
 {
-	int cap;
 	int size;
-	char* cache;
-};
-struct http_req_s
-{
-	int method;
-	buffer_t* buf;
-	dict* header;
+	char cache[MAX_REQ_SIZE];
 };
 
-struct http_rsp_s
+struct http_proxy_s
 {
+    coro_t* coro;
 
+    connection_t* req_con;
+    int   req_type;
+    dict* req_head;
+
+    connection_t* rsp_con;
 };
+
 
 
 int lazy_net_init(lazy_proxy_t* pxy);
 int lazy_net_uninit(lazy_proxy_t* pxy);
+
 int lazy_add_fd(int epfd, int evt, connection_t* con);
 int lazy_mod_fd(int epfd, int evt, connection_t* con);
 int lazy_del_fd(int epfd, connection_t* con);
@@ -152,10 +163,8 @@ int lazy_http_req_coro(coro_t* coro);
 
 int resume_coro_demand(coro_t* coro);
 int process_http_req(coro_t* coro);
-int parse_http_req(http_req_t* req);
-int parse_req_method(http_req_t* req, const char* head, int size);
-int parse_req_head(http_req_t* req, const char* head, int size);
-int check_http_req(http_req_t* req);
+int parse_http_req(http_proxy_t* pxy, const char* req, int size);
+int parse_req_head(http_proxy_t* pxy, const char* head, int size);
 int foword_http_req(coro_t* coro);
 
 
