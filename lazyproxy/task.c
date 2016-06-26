@@ -81,13 +81,16 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 				    if(!pxy) {
 				        resume_req_coro(con->coro);
 				    }else{
-				        if(pxy->req_con->fd == con->fd) {
-				            resume_req_coro(pxy->req_con->coro);
-				        }
-
-				        if(pxy->rsp_con->fd == con->fd){
-				            resume_rsp_coro(pxy->rsp_con->coro);
-				        }
+                        if (pxy->req_con) {
+                            if (pxy->req_con->fd == con->fd) {
+                                resume_req_coro(pxy->req_con->coro);
+                            }
+                        }
+                        if (pxy->rsp_con) {
+                            if (pxy->rsp_con->fd == con->fd) {
+                                resume_rsp_coro(pxy->rsp_con->coro);
+                            }
+                        }
 				    }
 				}
 				if(con->state == CONN_STATE_CONNECTING) {

@@ -347,10 +347,14 @@ int tcp_noblock_resolve(resov_data_t* resov)
 		pipe(__resov->fd_rst);
 		tcp_noblock(__resov->fd_rst[0], true);
 
-		__resov->count = resov->thread;
-		if(resov->thread < __THREAD_COUNT) {
-			__resov->count = __THREAD_COUNT;
-		}
+		__resov->count = __THREAD_COUNT;
+        if (resov) {
+            __resov->count = resov->thread;
+            if (resov->thread < __THREAD_COUNT) {
+                __resov->count = __THREAD_COUNT;
+            }
+        }
+
 		__resov->thread = (pthread_t*)malloc(__resov->count * sizeof(pthread_t));
 
 
