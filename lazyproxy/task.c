@@ -7,22 +7,22 @@
 
 #include "lazy.h"
 
-int lazy_proxy_task(lazy_proxy_t* pxy)
+int lazy_proxy_task(lazy_proxy_t* lazy)
 {
 	while (true) {
-		int rv = epoll_wait(pxy->epfd, pxy->events, pxy->conn_size, 1000);
+		int rv = epoll_wait(lazy->epfd, lazy->events, lazy->conn_size, 1000);
 		if(rv == 0) {
-			lazy_timer_task(pxy);
+			lazy_timer_task(lazy);
 		}else if(rv < 0) {
 			if(errno == EINTR) {
-				if(pxy->sig_term) {
+				if(lazy->sig_term) {
 					LOG_INFO("catch signal TERM\n");
 					break;
 				}
-				if(pxy->sig_usr2) {
+				if(lazy->sig_usr2) {
 					LOG_INFO("catch signal USER2\n");
 					log_flush();
-					pxy->sig_usr2 = false;
+					lazy->sig_usr2 = false;
 				}
 				continue;
 			}
@@ -31,13 +31,13 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 		}else{
 			int i=0;
 			for(;i<rv; i++) {
-				struct epoll_event* ev = &(pxy->events[i]);
+				struct epoll_event* ev = &(lazy->events[i]);
 				connection_t* con = (connection_t*)ev->data.ptr;
 
 				if(con->state == CONN_STATE_LISTENING) {
 					char addr[MAX_ADDR_SIZE] = {0};
 					int port = 0;
-					int fd = tcp_accept(pxy->listen, addr, MAX_ADDR_SIZE, &port);
+					int fd = tcp_accept(lazy->listen, addr, MAX_ADDR_SIZE, &port);
 					if(fd <= 0) {
 						LOG_ERROR("tcp_accept failed\n");
 						continue;
@@ -47,49 +47,61 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 					tcp_nodelay(fd, true);
 					tcp_noblock(fd, true);
 
-					if(fd >= pxy->conn_size) {
+					if(fd >= lazy->conn_size) {
 						int grow = MAX_CONCURRENT_CONN_GROW;
-						pxy->conn = realloc(pxy->conn, sizeof(connection_t) * (pxy->conn_size + grow));
-						OOM_CHECK(pxy->conn, "realloc(pxy->conn, sizeof(connection_t) * (pxy->conn_size + grow))");
-						pxy->events = realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow));
-						OOM_CHECK(pxy->events, "realloc(pxy->events, sizeof(struct epoll_event) * (pxy->conn_size + grow))");
-					    OOM_CHECK(pxy->events, "mrealloc(pxy->coro, sizeof(coro_t*) * (pxy->conn_size + grow)");
-						memset(pxy->conn + pxy->conn_size, 0, sizeof(connection_t) * grow);
-						memset(pxy->events + pxy->conn_size, 0, sizeof(struct epoll_event) * grow);
 
-						pxy->conn_size += grow;
+						lazy->conn = realloc(lazy->conn, sizeof(connection_t) * (lazy->conn_size + grow));
+						OOM_CHECK(lazy->conn, "realloc(lazy->conn, sizeof(connection_t) * (lazy->conn_size + grow))");
+
+						lazy->events = realloc(lazy->events, sizeof(struct epoll_event) * (lazy->conn_size + grow));
+						OOM_CHECK(lazy->events, "realloc(lazy->events, sizeof(struct epoll_event) * (lazy->conn_size + grow))");
+
+						memset(lazy->conn + lazy->conn_size, 0, sizeof(connection_t) * grow);
+						memset(lazy->events + lazy->conn_size, 0, sizeof(struct epoll_event) * grow);
+
+						lazy->conn_size += grow;
 					}
 
-					connection_t* con = &pxy->conn[fd];
+					connection_t* con = &lazy->conn[fd];
+					con->lazy = lazy;
 					con->fd = fd;
 					con->type = CONN_TYPE_CLIENT;
 					con->state = CONN_STATE_CONNECTED;
-					con->pxy = pxy;
 
-					if(lazy_add_fd(pxy->epfd, EPOLLIN, con) < 0) {
+					if(lazy_add_fd(lazy->epfd, EPOLLIN, con) < 0) {
 						LOG_ERROR("lazy_add_fd failed.\n");
 						close(fd);
 					}
-					lazy_spawn_coro(con);
-					// TODO biz
+					lazy_spawn_http_req_coro(con);
+					resume_req_coro(con->coro);
 				}
 
-				if(con->state == CONN_STATE_CONNECTED) {
-				    LOG_DEBUG("connected fd=%d\n", con->fd);
-					resume_coro_demand(con->http_pxy->coro);
+				if(con->state == CONN_STATE_CONNECTED || con->state == CONN_STATE_CONNECTING) {
+				    http_proxy_t* pxy = con->pxy;
+				    if(!pxy) {
+				        resume_req_coro(con->coro);
+				    }else{
+				        if(pxy->req_con->fd == con->fd) {
+				            resume_req_coro(pxy->req_con->coro);
+				        }
+
+				        if(pxy->rsp_con->fd == con->fd){
+				            resume_rsp_coro(pxy->rsp_con->coro);
+				        }
+				    }
 				}
 				if(con->state == CONN_STATE_CONNECTING) {
-                    LOG_DEBUG("connection fd=%d\n", con->fd);
-                    resume_coro_demand(con->http_pxy->coro);
+				    con->state = CONN_STATE_CONNECTED;
+				    lazy_spawn_http_rsp_coro(con);
+				    resume_rsp_coro(con->coro);
 				}
 				if(con->state == CONN_STATE_CLOSING) {
-					lazy_del_fd(con->pxy->epfd, con);
+					lazy_del_fd(con->lazy->epfd, con);
 					con->state = CONN_STATE_CLOSED;
 					//close(con->fd);
 				}
 				if(con->state == CONN_STATE_RESOLVING) {
-				    resov_data_t* d = tcp_noblock_resolve_result();
-				    resume_coro_demand((coro_t*)d->data);
+				    resume_resolve_coro(con->coro);
 				}
 
 			}
@@ -97,8 +109,8 @@ int lazy_proxy_task(lazy_proxy_t* pxy)
 	}
 	return 0;
 }
-int lazy_timer_task(lazy_proxy_t* pxy)
+int lazy_timer_task(lazy_proxy_t* lazy)
 {
-	LOG_DEBUG("lazy_timer_task: timeout = %dms\n", pxy->timout);
+	LOG_DEBUG("lazy_timer_task: timeout = %dms\n", lazy->timout);
 	return 0;
 }

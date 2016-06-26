@@ -125,6 +125,11 @@ struct connection_s
 	int type;
 	int state;
 
+	coro_t* coro;
+
+	buffer_t* recv_buf;
+	buffer_t* send_buf;
+
 	http_proxy_t* pxy;
 };
 
@@ -136,9 +141,11 @@ struct buffer_s
 
 struct http_proxy_s
 {
-    coro_t* coro;
+    coro_t* req_coro;
+    coro_t* rsp_coro;
 
     connection_t* req_con;
+    int req_port;
     int   req_type;
     dict* req_head;
 
@@ -154,18 +161,23 @@ int lazy_add_fd(int epfd, int evt, connection_t* con);
 int lazy_mod_fd(int epfd, int evt, connection_t* con);
 int lazy_del_fd(int epfd, connection_t* con);
 
-int lazy_proxy_task(lazy_proxy_t* pxy);
-int lazy_timer_task(lazy_proxy_t* pxy);
+int lazy_proxy_task(lazy_proxy_t* lazy);
+int lazy_timer_task(lazy_proxy_t* lazy);
 
-int lazy_spawn_coro(connection_t* con);
+int lazy_spawn_http_req_coro(connection_t* con);
+int lazy_spawn_http_rsp_coro(connection_t* con);
+
+int lazy_http_resolve_coro(coro_t* coro);
 int lazy_http_req_coro(coro_t* coro);
+int lazy_http_rsp_coro(coro_t* coro);
 
+int resume_req_coro(coro_t* coro);
+int resume_rsp_coro(coro_t* coro);
+int resume_resolve_coro(coro_t* coro);
 
-int resume_coro_demand(coro_t* coro);
-int process_http_req(coro_t* coro);
 int parse_http_req(http_proxy_t* pxy, const char* req, int size);
 int parse_req_head(http_proxy_t* pxy, const char* head, int size);
-int foword_http_req(coro_t* coro);
+int resolve_proxy_tunnel(http_proxy_t* pxy);
 
 
 

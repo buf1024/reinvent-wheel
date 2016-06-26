@@ -12,11 +12,14 @@ int lazy_net_init(lazy_proxy_t* pxy)
 {
 	pxy->conn_size = MAX_CONCURRENT_CONN;
 	pxy->timout = MAX_EPOLL_TIMEOUT;
+
 	pxy->conn = malloc(sizeof(connection_t) * pxy->conn_size);
 	OOM_CHECK(pxy->conn, "malloc(sizeof(connection_t) * pxy->conn_size)");
+
 	pxy->events = malloc(sizeof(struct epoll_event) * pxy->conn_size);
     OOM_CHECK(pxy->events, "malloc(sizeof(struct epoll_event) * pxy->conn_size)");
-	memset(pxy->conn, 0, sizeof(connection_t) * pxy->conn_size);
+
+    memset(pxy->conn, 0, sizeof(connection_t) * pxy->conn_size);
     memset(pxy->events, 0, sizeof(struct epoll_event) * pxy->conn_size);
 
 
@@ -45,18 +48,25 @@ int lazy_net_init(lazy_proxy_t* pxy)
 
 	LOG_INFO("listening: host=%s, ip=%s, port=%d\n", pxy->host, ipbuf, pxy->port);
 
+	int fd = tcp_noblock_resolve(NULL);
+	if(fd <= 0) {
+        LOG_ERROR("tcp_noblock_resolve failed, errno=%d\n", errno);
+        return -1;
+	}
+    con = &pxy->conn[fd];
+    con->fd = fd;
+    con->type = CONN_TYPE_CLIENT;
+    con->state = CONN_STATE_RESOLVING;
+    con->coro = coro_new(lazy_http_resolve_coro, con, MAX_CORO_STACK_SIZE);
+    OOM_CHECK(con->coro, "coro_new(lazy_http_resolve_coro, con, MAX_CORO_STACK_SIZE)");
+
+    lazy_add_fd(pxy->epfd, EPOLLIN, con);
+
 	return 0;
 }
 int lazy_net_uninit(lazy_proxy_t* pxy)
 {
-	if(pxy) {
-		if(pxy->conn) {
-			free(pxy->conn);
-		}
-		if(pxy->events) {
-			free(pxy->events);
-		}
-	}
+	LOG_INFO("lazy_net_uninit, leave os to free resouce.\n");
 	return 0;
 }
 

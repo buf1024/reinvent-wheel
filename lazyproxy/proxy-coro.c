@@ -7,10 +7,19 @@
 
 #include "lazy.h"
 
-static int http_req_reset(http_proxy_t* pxy)
+static int http_req_reset(connection_t* con)
 {
-	coro_reset(pxy->coro);
-	pxy->req_con = NULL;
+    coro_t* coro = con->coro;
+	coro_reset(coro);
+
+	con->recv_buf->size = 0;
+	con->send_buf->size = 0;
+
+	http_proxy_t* pxy = con->pxy;
+
+	pxy->req_con = coro;
+	pxy->rsp_coro = NULL;
+	pxy->req_con = con;
 	pxy->req_type = HTTP_METHORD_NONE;
 	dict_empty(pxy->req_head);
 	pxy->rsp_con = NULL;
@@ -18,8 +27,42 @@ static int http_req_reset(http_proxy_t* pxy)
 	return 0;
 }
 
+static int http_rsp_reset(connection_t* con)
+{
+    coro_t* coro = con->coro;
+    coro_reset(coro);
 
-int resume_coro_demand(coro_t* coro)
+    con->recv_buf->size = 0;
+    con->send_buf->size = 0;
+
+    http_proxy_t* pxy = con->pxy;
+
+    pxy->rsp_coro = coro;
+    pxy->rsp_con = con;
+    dict_empty(pxy->req_head);
+
+    return 0;
+}
+
+static int resolve_reset(connection_t* con)
+{
+    coro_t* coro = con->coro;
+    coro_reset(coro);
+
+    con->recv_buf = NULL;
+    con->send_buf = NULL;
+    con->pxy = NULL;
+
+    return 0;
+}
+
+static int free_http_proxy(http_proxy_t* pxy)
+{
+
+}
+
+
+int resume_req_coro(coro_t* coro)
 {
 	if(coro == NULL) {
 		return CORO_FINISH;
@@ -42,94 +85,276 @@ int resume_coro_demand(coro_t* coro)
 	return state;
 }
 
-
-
-int lazy_spawn_coro(connection_t* con)
+int resume_resolve_coro(coro_t* coro)
 {
-	if (!con->pxy) {
-	    con->pxy = malloc(sizeof(*con->pxy));
-	    OOM_CHECK(con->pxy, "malloc(sizeof(*con->pxy)");
-	    memset(con->pxy, 0, sizeof(*con->pxy));
+    if(coro == NULL) {
+        return CORO_FINISH;
+    }
+    connection_t* con = (connection_t*)coro_get_data(coro);
+    int state = coro_resume(coro);
+    if(state == CORO_ABORT) {
+        http_proxy_t* pxy = con->pxy;
+        if(pxy->req_con) {
+            lazy_del_fd(pxy->req_con->lazy->epfd, pxy->req_con);
+            close(pxy->req_con->fd);
+            pxy->req_con = CONN_STATE_CLOSED;
+        }
+        if(pxy->rsp_con) {
+            lazy_del_fd(pxy->rsp_con->lazy->epfd, pxy->req_con);
+            close(pxy->rsp_con->fd);
+            pxy->rsp_con = CONN_STATE_CLOSED;
 
-	    con->pxy->req_head = dict_create(con);
-		OOM_CHECK(con->pxy->req_head, "dict_create(con)");
+        }
+    }
 
-		con->pxy->coro = coro_new(lazy_http_req_coro, con, MAX_CORO_STACK_SIZE);
-		OOM_CHECK(con->pxy->coro, "coro_new(lazy_http_req_coro, coro, MAX_CORO_STACK_SIZE)");
+    resolve_reset(con);
 
-	}
-
-
-	http_req_reset(con->pxy);
-
-	con->pxy->req_con = con;
-
-	LOG_INFO("new http request, lazy_spawn_coro coro=0x%x\n", con->pxy->coro);
-
-	return resume_coro_demand(con->pxy->coro);
+    return CORO_FINISH;
 }
-int lazy_http_req_coro(coro_t* coro)
-{
-	// proccess read
-	if(process_http_req(coro) != CORO_FINISH) {
-		return CORO_ABORT;
-	}
 
-    if(foword_http_req(coro) != CORO_FINISH) {
-        return CORO_ABORT;
+
+int lazy_spawn_http_req_coro(connection_t* con)
+{
+
+    if(!con->coro) {
+        con->coro = coro_new(lazy_http_req_coro, con, MAX_CORO_STACK_SIZE);
+        OOM_CHECK(con->coro, "coro_new(lazy_http_req_coro, con, MAX_CORO_STACK_SIZE)");
+    }
+
+    if (!con->recv_buf) {
+        con->recv_buf = malloc(sizeof(*con->recv_buf));
+        OOM_CHECK(con->recv_buf, "malloc(sizeof(*con->recv_buf)");
+    }
+    if (!con->send_buf) {
+        con->send_buf = malloc(sizeof(*con->send_buf));
+        OOM_CHECK(con->send_buf, "malloc(sizeof(*con->send_buf)");
+    }
+    if (!con->pxy) {
+        con->pxy = malloc(sizeof(*con->pxy));
+        memset(con->pxy, 0, sizeof(*con->pxy));
+
+        con->pxy->req_head = dict_create(con);
+        OOM_CHECK(con->pxy->req_head, "dict_create(con)");
+
     }
 
 
-	return CORO_FINISH;
+    http_req_reset(con);
+
+    return 0;
 }
 
-int process_http_req(coro_t* coro)
+int lazy_spawn_http_rsp_coro(connection_t* con)
+{
+    if(!con->coro) {
+        con->coro = coro_new(lazy_http_rsp_coro, con, MAX_CORO_STACK_SIZE);
+        OOM_CHECK(con->coro, "coro_new(lazy_http_req_coro, con, MAX_CORO_STACK_SIZE)");
+    }
+
+    if (!con->recv_buf) {
+        con->recv_buf = malloc(sizeof(*con->recv_buf));
+        OOM_CHECK(con->recv_buf, "malloc(sizeof(*con->recv_buf)");
+    }
+    if (!con->send_buf) {
+        con->send_buf = malloc(sizeof(*con->send_buf));
+        OOM_CHECK(con->send_buf, "malloc(sizeof(*con->send_buf)");
+    }
+
+    http_rsp_reset(con);
+
+    return 0;
+}
+
+
+int lazy_http_req_coro(coro_t* coro)
 {
     connection_t* con = (connection_t*)coro_get_data(coro);
     http_proxy_t* p = con->pxy;
 
-	buffer_t buf;
-	buf.size = 0;
+    buffer_t* recv_buf = con->recv_buf;
+    buffer_t* send_buf = con->send_buf;
 
-	do {
-		bool ok = false;
-		int rv = tcp_read(p->req_con->fd, buf->cache + buf->size, sizeof(buf.cache) - buf.size, &ok);
-		if (rv > 0 && ok) {
-			buf->size += rv;
-			rv = parse_http_req(p, buf.cache, buf.size);
-			if(rv < 0) {
-				LOG_ERROR("parse_http_req failed.\n");
-				return CORO_ABORT;
-			}
-			if(rv == 0) {
-				coro_yield_value(coro, CORO_RESUME);
-				continue;
-			}
+    do {
+        bool ok = false;
+        int rv = tcp_read(p->req_con->fd, recv_buf->cache + recv_buf->size, sizeof(recv_buf.cache) - recv_buf.size, &ok);
+        if (rv > 0 && ok) {
+            recv_buf->size += rv;
+
+            if (p->rsp_con == NULL ) {
+
+                rv = parse_http_req(p, recv_buf.cache, recv_buf.size);
+                if (rv < 0) {
+                    LOG_ERROR("parse_http_req failed.\n");
+                    return CORO_ABORT;
+                }
+                if (rv == 0) {
+                    coro_yield_value(coro, CORO_RESUME);
+                    continue;
+                }
+
+                LOG_DEBUG("req done\n\n");
+
+                dict_iterator* it = dict_get_safe_iterator(p->req_head);
+                dict_entry* de = NULL;
+                while ((de = dict_next(it)) != NULL ) {
+                    char* k = (char*) de->key;
+                    char* v = (char*) de->val;
+
+                    LOG_DEBUG("%s: %s\n", k, v);
+                }
+                dict_release_iterator(it);
+
+                if(resolve_proxy_tunnel(p) == CORO_ABORT) {
+                    LOG_ERROR("resolve_proxy_tunnel failed.\n");
+                    return CORO_ABORT;
+                }
+
+            }else{
+
+            }
 
 
-			LOG_DEBUG("req done\n%s\n", buf->cache);
-			dict_iterator* it = dict_get_safe_iterator(p->req_head);
-			dict_entry* de = NULL;
-			while((de = dict_next(it)) != NULL) {
-			    char* k = (char*)de->key;
-			    char* v = (char*)de->val;
+            break; // READ DONE
 
-			    LOG_DEBUG("%s: %s\n", k, v);
-			}
-			dict_release_iterator(it);
+        }
+        if (ok && rv == 0) {
+            coro_yield_value(coro, CORO_RESUME);
+            continue;
+        }
+
+        if(!ok) {
+
+        }
+
+        return CORO_ABORT;
+    } while (true);
+
+    return CORO_FINISH;
+}
+int lazy_http_rsp_coro(coro_t* coro)
+{
+    connection_t* rsp_con = (connection_t*)coro_get_data(coro);
+    connection_t* req_con = rsp_con->pxy->req_con;
+
+    buffer_t* rsp_send_buf = rsp_con->send_buf;
+    buffer_t* rsp_recv_buf = rsp_con->recv_buf;
+
+    buffer_t* req_send_buf = req_con->send_buf;
+    buffer_t* req_recv_buf = req_con->recv_buf;
+
+    int rv = 0;
+
+    do {
+        bool ok = false;
+        if(rsp_send_buf->size > 0) {
+            rv = tcp_write(rsp_con->fd, rsp_send_buf->cache, rsp_send_buf->size, &ok);
+            if(ok) {
+                if(rv > 0) {
+                    rsp_send_buf->size -= rv;
+
+                    memcpy(req_send_buf->cache + req_send_buf->size, rsp_send_buf->cache, rv);
+                    req_send_buf->size += rv;
+
+                    memmove(rsp_send_buf->cache, rsp_send_buf->cache + rv, rsp_send_buf->size);
+                    if(rsp_send_buf->size > 0) {
+                        memmove(rsp_send_buf->cache, rsp_send_buf->cache + rv, rsp_send_buf->size);
+                    }
+                }else{
+                    LOG_INFO("close connection.\n");
+                    // TODO
+                    return CORO_FINISH;
+                }
+            }else{
+                free_http_proxy(rsp_con->pxy);
+                return CORO_ABORT;
+            }
+        }
+        rv = tcp_read(rsp_con->fd, rsp_recv_buf->cache + rsp_recv_buf->size, sizeof(rsp_recv_buf.cache) - rsp_recv_buf.size, &ok);
+        if (ok) {
+            if (rv > 0) {
+
+                rsp_recv_buf->size += rv;
+
+                memcpy(req_send_buf->cache + req_send_buf->size, rsp_recv_buf->cache, rv);
+                req_send_buf->size += rv;
+
+                memmove(rsp_send_buf->cache, rsp_send_buf->cache + rv, rsp_send_buf->size);
+                if(rsp_send_buf->size > 0) {
+                    memmove(rsp_send_buf->cache, rsp_send_buf->cache + rv, rsp_send_buf->size);
+                }
+            }else{
+
+                LOG_INFO("close connection.\n");
+                // TODO
+                return CORO_FINISH;
+            }
+        }
+
+    }while(true);
+
+    return CORO_FINISH;
+}
+int lazy_http_resolve_coro(coro_t* coro)
+{
+    resov_data_t* d = tcp_noblock_resolve_result();
+    if(!d) {
+        return CORO_ABORT;
+    }
+    if(!d->resov) {
+        LOG_ERROR("fail to resolve host:%s\n", d->host);
+        return CORO_ABORT;
+    }
+
+    http_proxy_t* pxy = (http_proxy_t*)d->data;
+
+    int fd = tcp_noblock_connect(d->addr, pxy->req_port);
+    if(fd <=0) {
+        LOG_ERROR("tcp_noblock_connect failed.\n");
+        free(d);
+        return CORO_ABORT;
+    }
+    free(d);
 
 
-			break; // READ DONE
+    lazy_proxy_t* lazy = pxy->req_con->lazy;
+    if(fd >= lazy->conn_size) {
+        int grow = MAX_CONCURRENT_CONN_GROW;
 
-		}
-		if (ok && rv == 0) {
-			coro_yield_value(coro, CORO_RESUME);
-			continue;
-		}
-		return CORO_ABORT;
-	} while (true);
+        lazy->conn = realloc(lazy->conn, sizeof(connection_t) * (lazy->conn_size + grow));
+        OOM_CHECK(lazy->conn, "realloc(lazy->conn, sizeof(connection_t) * (lazy->conn_size + grow))");
 
-	return CORO_FINISH;
+        lazy->events = realloc(lazy->events, sizeof(struct epoll_event) * (lazy->conn_size + grow));
+        OOM_CHECK(lazy->events, "realloc(lazy->events, sizeof(struct epoll_event) * (lazy->conn_size + grow))");
+
+        memset(lazy->conn + lazy->conn_size, 0, sizeof(connection_t) * grow);
+        memset(lazy->events + lazy->conn_size, 0, sizeof(struct epoll_event) * grow);
+
+        lazy->conn_size += grow;
+    }
+
+    connection_t* rsp_con = &lazy->conn[fd];
+
+    rsp_con->lazy = lazy;
+    rsp_con->fd = fd;
+    rsp_con->type = CONN_TYPE_CLIENT;
+    if(errno == EINPROGRESS) {
+        rsp_con->state = CONN_STATE_CONNECTING;
+    }else{
+        rsp_con->state = CONN_STATE_CONNECTED;
+    }
+    rsp_con->pxy = pxy;
+
+    if(rsp_con->state == CONN_STATE_CONNECTED) {
+        lazy_spawn_http_rsp_coro(rsp_con);
+    }
+
+    lazy_add_fd(lazy->epfd, EPOLLIN|EPOLLOUT, rsp_con);
+
+
+    lazy_spawn_http_rsp_coro(rsp_con);
+
+    return CORO_FINISH;
+
 }
 
 int parse_http_req(http_proxy_t* pxy, const char* req, int size)
@@ -246,15 +471,17 @@ int parse_req_head(http_proxy_t* pxy, const char* head, int size)
 	return 0;
 }
 
-int foword_http_req(coro_t* coro)
+int resolve_proxy_tunnel(http_proxy_t* pxy)
 {
-    connection_t* con = (connection_t*)coro_get_data(coro);
-    http_proxy_t* p = con->http_pxy;
 
-    http_req_t* req = p->req;
-    http_req_t* rsp = p->rsp;
+    if(pxy->rsp_con != NULL) {
+        return CORO_FINISH;
+    }
 
-    char* host_port = (char*)dict_fetch_value(req->header, HTTP_HOST, sizeof(HTTP_HOST));
+    LOG_INFO("try establish http proxy tunnel\n");
+
+    dict* d = pxy->req_head;
+    char* host_port = (char*)dict_fetch_value(d, HTTP_HOST, sizeof(HTTP_HOST));
     if(!host_port) {
         LOG_ERROR("host header not found.\n");
         return CORO_ABORT;
@@ -266,7 +493,7 @@ int foword_http_req(coro_t* coro)
     const char* pos = strstr(host_port, ":");
     if(pos == NULL) {
         strcpy(host, host_port);
-        if(req->method == HTTP_METHORD_CONNECT) {
+        if(pxy->req_type == HTTP_METHORD_CONNECT) {
             port = HTTP_SSL_PORT;
         }else{
             port = HTTP_PORT;
@@ -280,118 +507,14 @@ int foword_http_req(coro_t* coro)
 
     LOG_DEBUG("host = %s, port = %d\n", host, port);
 
-    resov_data_t* d = malloc(sizeof(*d));
-    memset(d, 0, sizeof(*d));
-    strncpy(d->host, host, MIN(sizeof(d->host)-1, strlen(host)));
-    d->data = coro;
+    resov_data_t* r = malloc(sizeof(*r));
+    memset(r, 0, sizeof(*r));
+    strncpy(r->host, host, MIN(sizeof(r->host)-1, strlen(host)));
+    r->data = pxy;
 
-    int fd = tcp_noblock_resolve(d);
-    if(fd < 0) {
-        LOG_ERROR("tcp_noblock_resolve failed.\n");
-        return CORO_ABORT;
-    }
+    pxy->req_port = port;
 
-    lazy_proxy_t* pxy = con->pxy;
-    connection_t* rsvcon = &pxy->conn[fd];
-    rsvcon->fd = fd;
-    rsvcon->type = CONN_TYPE_CLIENT;
-    rsvcon->state = CONN_STATE_RESOLVING;
-    rsvcon->pxy = pxy;
-    rsvcon->http_pxy = p;
-
-    lazy_add_fd(con->pxy->epfd, EPOLLIN, rsvcon);
-
-    LOG_DEBUG("resolv fd = %d\n", fd);
-
-    coro_yield_value(p->coro, CORO_RESUME);
-
-    if(d->resov) {
-        LOG_INFO("RESOLVE SUCESS: host(%s) -> %s\n", host, d->addr);
-    }else{
-        LOG_INFO("RESOLVE FAIL: host(%s)\n", host);
-
-    }
-
-
-    fd = tcp_noblock_connect(d->addr, port);
-    free(d);
-    if(fd < 0) {
-        LOG_ERROR("tcp_noblock_connect failed.\n");
-        return CORO_ABORT;
-    }
-
-    connection_t* dstcon = &pxy->conn[fd];
-    dstcon->fd = fd;
-    dstcon->type = CONN_TYPE_CLIENT;
-    if(errno == EINPROGRESS) {
-        dstcon->state = CONN_STATE_CONNECTING;
-    }else{
-        dstcon->state = CONN_STATE_CONNECTED;
-    }
-    dstcon->pxy = pxy;
-    dstcon->http_pxy = p;
-    rsp->con = dstcon;
-
-    lazy_add_fd(con->pxy->epfd, EPOLLIN, rsvcon);
-
-    LOG_DEBUG("connect fd = %d\n", fd);
-
-    if(dstcon->state == CONN_STATE_CONNECTING) {
-        coro_yield_value(p->coro, CORO_RESUME);
-    }
-
-    buffer_t* rsp_buf = rsp->buf;
-
-    do {
-        bool ok = false;
-        int rv = tcp_read(dstcon->fd, rsp_buf->cache, rsp_buf->cap, &ok);
-        if (rv > 0 && ok) {
-            char* pos = strstr(rsp_buf->cache, HTTP_END);
-            if(!pos) {
-                return 0;
-            }
-            if(rv < 0) {
-                LOG_ERROR("parse_http_req failed.\n");
-                return CORO_ABORT;
-            }
-            if(rv == 0) {
-                coro_yield_value(coro, CORO_RESUME);
-                continue;
-            }
-
-            rv = check_http_req(req);
-            if(rv < 0) {
-                LOG_ERROR("check_http_req failed.\n");
-                return CORO_ABORT;
-            }
-            if(rv == 0) {
-                coro_yield_value(coro, CORO_RESUME);
-                continue;
-            }
-
-            LOG_DEBUG("req done\n%s\n", buf->cache);
-            dict_iterator* it = dict_get_safe_iterator(req->header);
-            dict_entry* de = NULL;
-            while((de = dict_next(it)) != NULL) {
-                char* k = (char*)de->key;
-                char* v = (char*)de->val;
-
-                LOG_DEBUG("%s: %s\n", k, v);
-            }
-            dict_release_iterator(it);
-
-
-            break; // READ DONE
-
-        }
-        if (ok && rv == 0) {
-            coro_yield_value(coro, CORO_RESUME);
-            continue;
-        }
-        return CORO_ABORT;
-    } while (true);
-
-
+    tcp_noblock_resolve(r);
 
 	return CORO_FINISH;
 }
