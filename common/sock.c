@@ -27,7 +27,7 @@
 
 
 #ifndef RESOLVE_THREAD_COUNT
-static const int __THREAD_COUNT = 1;
+static const int __THREAD_COUNT = 4;
 #else
 static const int __THREAD_COUNT = RESOLVE_THREAD_COUNT;
 #endif

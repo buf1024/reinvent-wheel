@@ -57,23 +57,20 @@ int lazy_net_init(lazy_proxy_t* pxy)
     con->fd = fd;
     con->type = CONN_TYPE_CLIENT;
     con->state = CONN_STATE_RESOLVING;
-    con->coro = coro_new(lazy_http_resolve_coro, con, MAX_CORO_STACK_SIZE);
-    OOM_CHECK(con->coro, "coro_new(lazy_http_resolve_coro, con, MAX_CORO_STACK_SIZE)");
-
     lazy_add_fd(pxy->epfd, EPOLLIN, con);
 
 	return 0;
 }
 int lazy_net_uninit(lazy_proxy_t* pxy)
 {
-	LOG_INFO("lazy_net_uninit, leave os to free resouce.\n");
+	LOG_INFO("lazy_net_uninit, leave os to free resouce. 0x%x\n", pxy);
 	return 0;
 }
 
 int lazy_add_fd(int epfd, int evt, connection_t* con)
 {
 	struct epoll_event event;
-	event.events = evt | EPOLLERR;
+	event.events = evt | EPOLLERR | EPOLLHUP;
 	event.data.ptr = con;
 
 	if(epoll_ctl(epfd, EPOLL_CTL_ADD, con->fd, &event) != 0) {
@@ -87,7 +84,7 @@ int lazy_add_fd(int epfd, int evt, connection_t* con)
 int lazy_mod_fd(int epfd, int evt, connection_t* con)
 {
 	struct epoll_event event;
-	event.events = evt | EPOLLERR;
+	event.events = evt | EPOLLERR | EPOLLHUP;
 	event.data.ptr = con;
 
 	if(epoll_ctl(epfd, EPOLL_CTL_MOD, con->fd, &event) != 0) {

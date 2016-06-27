@@ -53,7 +53,7 @@ enum {
 	MAX_PATH_SIZE       = 256,
 	MAX_REQ_SIZE        = 4*1024,
 	MAX_REQ_GROW_SIZE   = 512,
-	MAX_CORO_STACK_SIZE = 16*1024,
+	MAX_CORO_STACK_SIZE = 160*1024,
 };
 
 enum {
@@ -75,6 +75,7 @@ enum {
 	CONN_STATE_CLOSING,
 	CONN_STATE_CLOSED,
 	CONN_STATE_RESOLVING,
+	CONN_STATE_WAIT,
 };
 
 enum {
@@ -126,10 +127,6 @@ struct connection_s
 	int state;
 
 	coro_t* coro;
-
-	buffer_t* recv_buf;
-	buffer_t* send_buf;
-
 	http_proxy_t* pxy;
 };
 
@@ -141,11 +138,10 @@ struct buffer_s
 
 struct http_proxy_s
 {
-    coro_t* req_coro;
-    coro_t* rsp_coro;
-
     connection_t* req_con;
-    int req_port;
+
+    buffer_t* req_r;
+    buffer_t* req_w;
     int   req_type;
     dict* req_head;
 
@@ -165,19 +161,18 @@ int lazy_proxy_task(lazy_proxy_t* lazy);
 int lazy_timer_task(lazy_proxy_t* lazy);
 
 int lazy_spawn_http_req_coro(connection_t* con);
-int lazy_spawn_http_rsp_coro(connection_t* con);
 
-int lazy_http_resolve_coro(coro_t* coro);
 int lazy_http_req_coro(coro_t* coro);
-int lazy_http_rsp_coro(coro_t* coro);
 
-int resume_req_coro(coro_t* coro);
-int resume_rsp_coro(coro_t* coro);
-int resume_resolve_coro(coro_t* coro);
+int lazy_http_req_read(coro_t* coro, buffer_t* buf);
+int lazy_http_rsp_write(coro_t* coro, buffer_t* buf);
+int lazy_http_rsp_read(coro_t* coro, buffer_t* buf);
+int lazy_http_req_write(coro_t* coro, buffer_t* buf);
 
+int resume_http_req_coro(coro_t* coro);
 int parse_http_req(http_proxy_t* pxy, const char* req, int size);
 int parse_req_head(http_proxy_t* pxy, const char* head, int size);
-int resolve_proxy_tunnel(http_proxy_t* pxy);
+int establish_proxy_tunnel(http_proxy_t* pxy);
 
 
 

@@ -34,6 +34,7 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 				struct epoll_event* ev = &(lazy->events[i]);
 				connection_t* con = (connection_t*)ev->data.ptr;
 
+				LOG_DEBUG("epoll fd = %d, st = %d\n", con->fd, con->state);
 				if(con->state == CONN_STATE_LISTENING) {
 					char addr[MAX_ADDR_SIZE] = {0};
 					int port = 0;
@@ -73,40 +74,25 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 						close(fd);
 					}
 					lazy_spawn_http_req_coro(con);
-					resume_req_coro(con->coro);
+					resume_http_req_coro(con->coro);
 				}
 
-				if(con->state == CONN_STATE_CONNECTED || con->state == CONN_STATE_CONNECTING) {
-				    http_proxy_t* pxy = con->pxy;
-				    if(!pxy) {
-				        resume_req_coro(con->coro);
-				    }else{
-                        if (pxy->req_con) {
-                            if (pxy->req_con->fd == con->fd) {
-                                resume_req_coro(pxy->req_con->coro);
-                            }
-                        }
-                        if (pxy->rsp_con) {
-                            if (pxy->rsp_con->fd == con->fd) {
-                                resume_rsp_coro(pxy->rsp_con->coro);
-                            }
-                        }
-				    }
+				if(con->state == CONN_STATE_CONNECTED) {
+					resume_http_req_coro(con->coro);
 				}
 				if(con->state == CONN_STATE_CONNECTING) {
+					LOG_DEBUG("connected fd = %d.\n", con->fd);
 				    con->state = CONN_STATE_CONNECTED;
-				    lazy_spawn_http_rsp_coro(con);
-				    resume_rsp_coro(con->coro);
-				}
-				if(con->state == CONN_STATE_CLOSING) {
-					lazy_del_fd(con->lazy->epfd, con);
-					con->state = CONN_STATE_CLOSED;
-					//close(con->fd);
+				    resume_http_req_coro(con->coro);
 				}
 				if(con->state == CONN_STATE_RESOLVING) {
-				    resume_resolve_coro(con->coro);
+					resov_data_t* d = tcp_noblock_resolve_result();
+					if(d) {
+						LOG_DEBUG("resove %s %s\n", d->host, d->addr);
+						http_proxy_t* p = (http_proxy_t*)d->data;
+						resume_http_req_coro(p->req_con->coro);
+					}
 				}
-
 			}
 		}
 	}
