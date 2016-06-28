@@ -78,6 +78,7 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 				}
 
 				if(con->state == CONN_STATE_CONNECTED) {
+
 					resume_http_req_coro(con->coro);
 				}
 				if(con->state == CONN_STATE_CONNECTING) {
