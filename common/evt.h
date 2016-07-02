@@ -14,14 +14,28 @@
 extern "C" {
 #endif
 
-#define EVT_DEFAULT_POLL_TIMEOUT  1000
-
 typedef struct event_s event_t;
+typedef struct poll_event_s poll_event_t;
 
-typedef int (*evt_callback_t)(event_t* evt, int fd, int mask, void* args);
-
-enum evt_mask
+struct event_s
 {
+    int evt_size;
+    int timeout;
+
+    poll_event_t* events;
+
+    void* data;
+};
+
+struct poll_event_s
+{
+    int evt;
+    int fd;
+};
+
+enum
+{
+    EVT_NONE  = 0x00,
     EVT_READ  = 0x01,
     EVT_WRITE = 0x02,
     EVT_RDWR  = 0x03, // 0x02 & 0x01 = 0x03
@@ -29,26 +43,15 @@ enum evt_mask
     EVT_ERROR = 0x08
 };
 
-enum evt_type
-{
-    EVT_SOCK      = 0x01,
-    EVT_SIGNAL    = 0x02,
-    EVT_TIMER     = 0x04,
-    EVT_TIMEOUT   = 0x08
-};
-
 event_t* evt_new(int evt_size, int to);
 int evt_free(event_t* evt);
 
-int evt_add(event_t* evt, int type, int fd, int mask, evt_callback_t cb, void* args);
-int evt_mod(event_t* evt);
-int evt_del(event_t* evt, int fd, int type);
+int evt_add(event_t* evt, int fd, int mask);
+int evt_mod(event_t* evt, int fd, int mask);
+int evt_del(event_t* evt, int fd);
 
-int evt_do_poll(event_t* evt);
+int evt_poll(event_t* evt, poll_event_t** poll_evt);
 
-
-int evt_loop(event_t* evt);
-int evt_loop_exit(event_t* evt);
 
 #ifdef __cplusplus
 }
