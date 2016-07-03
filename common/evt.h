@@ -6,8 +6,8 @@
  */
 
 
-#ifndef COMMON_EVT_H_
-#define COMMON_EVT_H_
+#ifndef __EVT_H__
+#define __EVT_H__
 
 
 #ifdef __cplusplus
@@ -58,4 +58,4 @@ int evt_poll(event_t* evt, poll_event_t** poll_evt);
 #endif
 
 
-#endif /* COMMON_EVT_H_ */
+#endif /* __EVT_H__ */
