@@ -236,8 +236,6 @@ static int __tson_dump_help(tson_t* tson, int space, char* buf, int size)
     int s = 0;
     int r = size;
 
-    char* b = buf;
-
     for(;i<TSON_HASH_ARRAY_SIZE; i++) {
         n = tson->n[i];
 
