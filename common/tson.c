@@ -329,6 +329,14 @@ tson_t* tson_parse_path(const char* path)
     return tson;
 }
 
+tson_t* tson_new()
+{
+    tson_t* tson = (tson_t*)malloc(sizeof(*tson));
+    memset(tson, 0, sizeof(*tson));
+
+    return tson;
+}
+
 int tson_free(tson_t* tson)
 {
     int i = 0;
@@ -381,15 +389,36 @@ int tson_get(tson_t* tson, const char* key, char** value, tson_t** sub_tson)
 
     return 0;
 }
-int tson_set(tson_t* tson, const char* key, const char* value, tson_t* sub_tson)
-{
-    char* v = NULL;
-    tson_t* t = NULL;
 
-    if(tson_get(tson, key, &v, &t) > 0) {
-        return -1;
+int tson_get_arr(tson_t* tson, const char* key, tson_arr_t** arr)
+{
+    *arr = NULL;
+
+    int index = murmur((unsigned char*)key, strlen(key)) % TSON_HASH_ARRAY_SIZE;
+    tson_node_t* n = tson->n[index];
+
+    if(!n) return 0;
+
+    int size = 0;
+    while(n) {
+    	if(strcmp(n->k, key) == 0) {
+    		if(*arr == NULL) {
+    			*arr = (tson_arr_t*)malloc(sizeof(tson_arr_t));
+    		}else{
+    			*arr = (tson_arr_t*)realloc(*arr, sizeof(tson_arr_t) * (size + 1));
+    		}
+    		(*arr)[size].value = n->v;
+    		(*arr)[size].tson = n->t;
+    		size++;
+    	}
+        n = n->n;
     }
 
+    return size;
+}
+
+int tson_set(tson_t* tson, const char* key, const char* value, tson_t* sub_tson)
+{
     int index = murmur((unsigned char*)key, strlen(key)) % TSON_HASH_ARRAY_SIZE;
     tson_node_t* n = tson->n[index];
 

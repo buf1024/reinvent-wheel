@@ -218,6 +218,15 @@ uint32_t murmur(unsigned char *data, size_t len)
     return h;
 }
 
+unsigned short get_cpu_count(void)
+{
+    long n_online_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n_online_cpus < 0) {
+        return 1;
+    }
+    return (unsigned short int)n_online_cpus;
+}
+
 
 
 /*

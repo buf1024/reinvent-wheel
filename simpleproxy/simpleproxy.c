@@ -5,21 +5,9 @@
  *      Author: Luo Guochun
  */
 
-#include "thinpxy.h"
-#include <errno.h>
-#include <bits/sockaddr.h>
+#include "simpleproxy.h"
 
-static char* to_lower(char* v) {
-	char* t = v;
-	while(*t++) {
-		if(isupper(*t)) {
-			*t = tolower(*t);
-		}
-	}
-	return v;
-}
-
-static char* trim(char* line)
+static char* __trim(char* line)
 {
 
 	char* end = line + strlen(line) - 1;
@@ -44,99 +32,45 @@ static char* trim(char* line)
 	return start;
 }
 
-static int skip_comment(config_t* conf, char* l, FILE* fp)
+static int __parse_addrinfo(char* v, char** rt_ip, int* rt_port)
 {
-	char line[1024] = {0};
-	if(*l == '#') {
-		if(strncmp(l, "#if 0", strlen("#if 0")) == 0) {
-			bool end = false;
-			while(!feof(fp)) {
-				l = fgets(line, sizeof(line) - 1, fp);
-				conf->parse.line++;
-
-				l = trim(l);
-				if(strncmp(l, "#endif", strlen("#endif")) == 0) {
-					end = true;
-					break;
-				}
-			}
-			if(!end) {
-				conf->parse.conf = strdup("#if 0");
-				conf->parse.error = strdup("missing #endif");
-				return -1;
-			}
-		}
-	}
-	return 0;
-}
-static int parse_kv(const char*line, char*k, char* v)
-{
-	char* kv = strchr(line, ' ');
-	if(kv == NULL) {
-		return -1;
-	}
-	strncpy(k, line, kv - line);
-	kv = trim(kv);
-
-	strncpy(v, kv, line + strlen(line) - kv);
-
-	return 0;
-}
-
-static bool parse_bool(char* v)
-{
-	if(strcasecmp(v, "yes") == 0) {
-		return true;
-	}
-	if(strcasecmp(v, "true") == 0) {
-		return true;
-	}
-	if(strcasecmp(v, "1") == 0) {
-		return true;
-	}
-
-	return false;
-}
-
-static int parse_addrinfo(char* v, sa_family_t* af, char* ip, char* port)
-{
+	char ip[128] = {0};
+	int proto_v = PROTO_IPV4;
 
 	char* col = strchr(v, ':');
-	if(col == NULL) {
-		return -1;
-	}
-	if(*(col + 1) == 0) {
-		return -1;
-	}
+	if(col == NULL) return -1;
+	if(*(col + 1) == 0) return -1;
+
 	if(*v == '[') {
-		*af = AF_INET6;
-		strncpy(ip, v, col - v);
+		if(*(v+1) == ']') return -1;
+		col = strstr(v, ']');
+		if(col == NULL) return -1;
+
+		strncpy(ip, v + 1, col - v - 1);
+
+		col = strstr(col, ':');
+		if(col == NULL) return -1;
+
+		if(*(col + 1) == 0) return -1;
+
+		proto_v = PROTO_IPV6;
+
 	} else if(*v == '*') {
-		*af = AF_INET;
 		strncpy(ip, "0.0.0.0", sizeof("0.0.0.0"));
+
+		proto_v = PROTO_IPV4;
 	}else{
-		*af = AF_INET;
 		strncpy(ip, v, col - v);
+		proto_v = PROTO_IPV4;
 	}
 
-	int iport = atoi(col + 1);
-	if(iport <= 0) {
+	*rt_port = atoi(col + 1);
+	if(*rt_port <= 0) {
 		return -1;
 	}
-	strcpy(port, col + 1);
+	rt_ip = strdup(__trim(ip));
 
-	char* t_ip = trim(ip);
-	char* t_port = trim(port);
-	if(t_ip != ip) {
-		memmove(ip, t_ip, strlen(t_ip));
-		ip[strlen(t_ip) - (t_ip - ip)] = 0;
-	}
-	if(t_port != port) {
-		memmove(port, t_port, strlen(t_port));
-		port[strlen(port) - (t_port - port)] = 0;
-	}
-
-	return 0;
+	return proto_v;
 }
 
 static int parse_backend(config_t* conf, backend_t* backend, char* v) {
@@ -186,7 +120,7 @@ static int parse_backend(config_t* conf, backend_t* backend, char* v) {
 	return 0;
 }
 
-static int parse_time(char* l, int* sec)
+static int __parse_time(char* l, int* sec)
 {
 	char* s = l, *s_nxt = NULL;
 	char v[1024] = { 0 };
@@ -337,16 +271,40 @@ static int parse_mode(config_t* conf, FILE* fp, char* mode)
 	return 0;
 }
 
-int parse_conf(config_t* conf)
+int parse_conf(simpleproxy_t* proxy)
 {
-	FILE* fp = fopen(conf->conf, "rb");
-	if(!fp) {
-		printf("open file %s failed, errno %d\n", conf->conf, errno);
+	tson_t* t = tson_parse_path(proxy->conf);
+	if(!t) {
+		printf("parse tson failed, file=%s\n", proxy->conf);
 		return -1;
 	}
 
-	char line[1024] = {0};
-	char* l = NULL;
+	tson_t* s = NULL;
+	char* v = NULL;
+
+	TSON_READ_STR_MUST(t, "log-path", v, s);
+	proxy->log_path = strdup(v);
+	TSON_READ_STR_MUST(t, "log-level", v, s);
+	proxy->log_level = log_get_level(v);
+	TSON_READ_INT_MUST(t, "log-buf-size", proxy->log_buf_size, s);
+
+	TSON_READ_STR_MUST(t, "listen", v, s);
+	proxy->proto_v = __parse_addrinfo(v, &proxy->listen, &proxy->port);
+	if(proxy->proto_v < 0) {
+		printf("parse ip address failed.\n");
+		return -1;
+	}
+	TSON_READ_INT_MUST(t, "thread", proxy->thread_num, s);
+	if(proxy->thread_num <= 0) {
+
+	}
+	TSON_READ_STR_MUST(t, "idle-close-time", v, s);
+	if(__parse_time(v, &proxy->idle_to) < 0) {
+		printf("parse time failed.\n");
+		return -1;
+	}
+
+	tson_free(t);
 
 
 	conf->pxy->idle_to = DEF_IDLE_TO;

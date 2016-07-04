@@ -39,6 +39,7 @@ int read_pid(pid_t* pid, const char* file);
 
 // hash
 uint32_t murmur(unsigned char *data, size_t len);
+unsigned short get_cpu_count(void);
 
 // string
 int match(const char* text, const char* pattern);
