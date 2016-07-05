@@ -12,10 +12,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <sys/epoll.h>
+#include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
 
 #include "tson.h"
 #include "coro.h"
 #include "log.h"
+#include "misc.h"
+#include "sock.h"
 
 
 #define TSON_READ_STR_MUST(t, k, v, st) \
@@ -64,7 +73,8 @@ typedef struct proxy_backend_s proxy_backend_t;
 typedef struct proxy_plugin_s  proxy_plugin_t;
 typedef struct connection_s    connection_t;
 typedef struct simpleproxy_s   simpleproxy_t;
-typedef struct proxy_pair_s    proxy_pair_t;
+typedef struct proxy_session_s proxy_session_t;
+typedef struct proxy_thread_s  proxy_thread_t;
 
 
 enum {
@@ -87,6 +97,13 @@ enum {
 enum {
 	PROTO_IPV4 = 4,
 	PROTO_IPV6 = 6,
+	LISTEN_BACK_LOG = 128,
+	EPOLL_TIMEOUT = 1000,
+};
+
+enum {
+	THREAD_STATE_ACTIVE,
+	THREAD_STATE_DEAD,
 };
 
 struct proxy_plugin_s
@@ -101,7 +118,7 @@ struct proxy_plugin_s
 	int (*proxy_packet)(simpleproxy_t* proxy, proxy_backend_t** backend);
 };
 
-struct proxy_pair_s
+struct proxy_session_s
 {
 	connection_t* req_con;
 	connection_t* pxy_con;
@@ -140,6 +157,22 @@ struct connection_s
 	int state;
 };
 
+struct proxy_thread_s
+{
+	simpleproxy_t* proxy;
+	int state;
+
+	int fd[2];
+
+	int epfd;
+
+
+	int nfd;
+	struct epoll_event* evts;
+
+	pthread_t tid;
+};
+
 struct simpleproxy_s
 {
 	char* conf;
@@ -164,13 +197,29 @@ struct simpleproxy_s
 	char* plugin_name;
 	proxy_plugin_t* plugin;
 
+	size_t nfd;
     connection_t* conns;
-	int ep_fd;
+    proxy_thread_t* threads;
+
+    int fd;
+
+    bool sig_term;
+    bool sig_usr1;
+    bool sig_usr2;
 };
 
 int parse_conf(simpleproxy_t* proxy);
 
-int init_net(simpleproxy_t* proxy);
+int schedule_fd(simpleproxy_t* proxy, int fd);
+int proxy_main_loop(simpleproxy_t* proxy);
 
+int proxy_init(simpleproxy_t* proxy);
+int proxy_uninit(simpleproxy_t* proxy);
+
+void* proxy_task_routine(void* args);
+
+int epoll_add_fd(int epfd, int evt, connection_t* con);
+int epoll_mod_fd(int epfd, int evt, connection_t* con);
+int epoll_del_fd(int epfd, connection_t* con);
 
 #endif /* __SIMPLEPROXY_H__ */

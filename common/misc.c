@@ -27,6 +27,7 @@
 
 enum {
     MAX_PATH_LEN = 256,
+	MAX_OPEN_FILE = 65535,
 };
 
 sigfunc* set_signal(int signo, sigfunc* func, int interupt)
@@ -226,6 +227,29 @@ unsigned short get_cpu_count(void)
     }
     return (unsigned short int)n_online_cpus;
 }
+size_t get_max_open_file_count(void)
+{
+    struct rlimit r;
+
+    if (getrlimit(RLIMIT_NOFILE, &r) < 0) {
+        printf("getrlimit");
+        return 0;
+    }
+
+    if (r.rlim_max != r.rlim_cur) {
+        if (r.rlim_max == RLIM_INFINITY)
+            r.rlim_cur = MAX_OPEN_FILE;
+        else if (r.rlim_cur < r.rlim_max)
+            r.rlim_cur = r.rlim_max;
+        if (setrlimit(RLIMIT_NOFILE, &r) < 0) {
+            printf("setrlimit");
+            return 0;
+        }
+    }
+
+    return (size_t)r.rlim_cur;
+}
+
 
 
 

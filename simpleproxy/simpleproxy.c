@@ -7,415 +7,218 @@
 
 #include "simpleproxy.h"
 
-static char* __trim(char* line)
+int schedule_fd(simpleproxy_t* proxy, int fd)
 {
+	static long counter = 0;
 
-	char* end = line + strlen(line) - 1;
-	char* start = line;
+	int index = counter++ % proxy->thread_num;
+	proxy_thread_t* t = &(proxy->threads[index]);
 
-	while(start <= end) {
-			if (*start == ' ' || *start == '\r' || *start == '\n') {
-				start++;
-			} else {
+	LOG_INFO("select thread %d to handle.\n", index);
+
+	if(write(t->fd[0], &fd, sizeof(int)) != sizeof(int)) {
+		LOG_ERROR("write fd to client failed.\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int proxy_main_loop(simpleproxy_t* proxy)
+{
+	char client_ip[128]; int client_port = 0;
+	for(;;) {
+		struct sockaddr_storage sa;
+		socklen_t salen = sizeof(sa);
+
+		int fd = accept(proxy->fd, (struct sockaddr*) &sa, &salen);
+
+		if(fd < 0) {
+			if(proxy->sig_term) {
+				LOG_INFO("catch quit signal.\n");
+				proxy->sig_term = false;
 				break;
 			}
-	}
-	while(start <= end) {
-		if(*end == ' ' || *end == '\r' || *end == '\n') {
-			end--;
-		}else{
-			break;
+			if(proxy->sig_usr1) {
+				proxy->sig_usr1 = false;
+			}
+			if(proxy->sig_usr2) {
+				log_flush();
+				proxy->sig_usr2 = false;
+			}
+			continue;
 		}
+
+
+		if (sa.ss_family == AF_INET) {
+			struct sockaddr_in *s = (struct sockaddr_in *) &sa;
+			inet_ntop(AF_INET, (void*) &(s->sin_addr), client_ip, sizeof(client_ip));
+			client_port = ntohs(s->sin_port);
+		} else {
+			struct sockaddr_in6 *s = (struct sockaddr_in6 *) &sa;
+			inet_ntop(AF_INET6, (void*) &(s->sin6_addr), client_ip, sizeof(client_ip));
+			client_port = ntohs(s->sin6_port);
+		}
+
+		LOG_INFO("accept client: ip=%s, port=%d\n", client_ip, client_port);
+
+		if(schedule_fd(proxy, fd) != 0) {
+			LOG_ERROR("schedule fd to thread failed.\n");
+			close(fd);
+		}
+
+		if(proxy->sig_usr1) {
+			proxy->sig_usr1 = false;
+		}
+		if(proxy->sig_usr2) {
+			log_flush();
+			proxy->sig_usr2 = false;
+		}
+
 	}
-	*(end + 1) = 0;
-
-	return start;
-}
-
-static int __parse_addrinfo(char* v, char** rt_ip, int* rt_port)
-{
-	char ip[128] = {0};
-	int proto_v = PROTO_IPV4;
-
-	char* col = strchr(v, ':');
-	if(col == NULL) return -1;
-	if(*(col + 1) == 0) return -1;
-
-	if(*v == '[') {
-		if(*(v+1) == ']') return -1;
-		col = strstr(v, ']');
-		if(col == NULL) return -1;
-
-		strncpy(ip, v + 1, col - v - 1);
-
-		col = strstr(col, ':');
-		if(col == NULL) return -1;
-
-		if(*(col + 1) == 0) return -1;
-
-		proto_v = PROTO_IPV6;
-
-	} else if(*v == '*') {
-		strncpy(ip, "0.0.0.0", sizeof("0.0.0.0"));
-
-		proto_v = PROTO_IPV4;
-	}else{
-		strncpy(ip, v, col - v);
-		proto_v = PROTO_IPV4;
-	}
-
-	*rt_port = atoi(col + 1);
-	if(*rt_port <= 0) {
-		return -1;
-	}
-	rt_ip = strdup(__trim(ip));
-
-	return proto_v;
-}
-
-static int parse_backend(config_t* conf, backend_t* backend, char* v) {
-	//backend newwork 127.0.0.1:11001 50;
-	char* col = NULL, *col_nxt = NULL;
-	char v_t[1024] = {0};
-
-	col = strchr(v, ' '); if(col == NULL) return -1;
-
-	col = trim(col); if(*col == 0) return -1;
-	col_nxt = strchr(col, ' '); if(col_nxt == NULL) return -1;
-	strncpy(v_t, col, col_nxt - col);
-	backend->name = strdup(v_t);
-
-	col = trim(col_nxt); if(*col == 0) return -1;
-	col_nxt = strchr(col, ' '); if(col_nxt == NULL) return -1;
-	strncpy(v_t, col, col_nxt - col);
-	backend->addr_str = strdup(v_t);
-	sa_family_t af;
-	char node[1024] = {0};
-	char port[1024] = {0};
-	if(parse_addrinfo(v_t, &af, node, port) != 0) {
-		conf->parse.conf = strdup(v);
-		conf->parse.error = strdup("work-mode, ip address missing port or port is not valid)");
-		return -1;
-	}
-    struct addrinfo hints = {
-        .ai_family = af,
-        .ai_socktype = SOCK_STREAM,
-        .ai_flags = AI_PASSIVE
-    };
-
-    if(getaddrinfo(node, port, &hints, &backend->addrs) != 0) {
-		conf->parse.error = strdup("work-mode, ip address is not valid");
-		return -1;
-    }
-
-    col = trim(col_nxt); if(*col == 0) return -1;
-	backend->weight = atoi(col);
-
-	if(backend->weight <= 0) {
-		conf->parse.conf = strdup(col);
-		conf->parse.error = strdup("work-mode, weight must greater than 0");
-		return -1;
-	}
-	backend->pxy = conf->pxy;
 	return 0;
 }
 
-static int __parse_time(char* l, int* sec)
+int proxy_init(simpleproxy_t* proxy)
 {
-	char* s = l, *s_nxt = NULL;
-	char v[1024] = { 0 };
-	*sec = 0;
+	if(log_init(proxy->log_level, proxy->log_level, proxy->log_path,
+			"simpleproxy", proxy->log_buf_size, 0, -1) != 0) {
+		printf("log_init failed.\n");
+		return -1;
+	}
+	LOG_INFO("logger is ready.\n");
 
-	s_nxt = strchr(s, 'h');
-	if (s_nxt != NULL) {
-		if (s_nxt != s) {
-			strncpy(v, s, s_nxt - s);
-			s_nxt = strrchr(v, ' ');
-			if (s_nxt != NULL) {
-				s_nxt = v;
-			}
-		} else {
+	proxy->fd = proxy->proto_v == PROTO_IPV4 ?
+			tcp_server(proxy->listen, proxy->port, LISTEN_BACK_LOG) :
+			tcp6_server(proxy->listen, proxy->port, LISTEN_BACK_LOG);
+
+	if(proxy->fd <= 0) {
+		LOG_FATAL("listen server failed, host=%s, port=%d\n", proxy->listen, proxy->port);
+		return -1;
+	}
+
+	proxy->nfd = get_max_open_file_count();
+	if(proxy->nfd <= 0) {
+		LOG_FATAL("get_max_open_file_count failed.\n");
+		return -1;
+	}
+	LOG_INFO("max open file: %ul\n", proxy->nfd);
+	proxy->conns = calloc(proxy->nfd, sizeof(connection_t));
+	if(!proxy->conns) {
+		LOG_FATAL("alloc connection failed.\n");
+		return -1;
+	}
+
+	proxy->threads = calloc(proxy->thread_num, sizeof(proxy_thread_t));
+	if(!proxy->threads) {
+		LOG_FATAL("alloc thread failed.\n");
+		return -1;
+	}
+
+	for(int i=0; i<proxy->thread_num; i++) {
+		proxy_thread_t* t = &proxy->threads[i];
+
+		t->proxy = proxy;
+		t->nfd = proxy->nfd / proxy->thread_num;
+		t->evts = calloc(t->nfd, sizeof(struct epoll_event));
+		if(!t->evts) {
+			LOG_FATAL("alloc thread info failed.\n");
 			return -1;
 		}
-		*sec += 3600 * atoi(s_nxt);
+		t->state = THREAD_STATE_DEAD;
+
+		pthread_create(&t->tid, NULL, proxy_task_routine, t);
+		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
-	s_nxt = strchr(s, 'm');
-	if (s_nxt != NULL) {
-		if (s_nxt != s) {
-			strncpy(v, s, s_nxt - s);
-			s_nxt = strrchr(v, ' ');
-			if (s_nxt != NULL) {
-				s_nxt = v;
-			}
-			*sec += 60 * atoi(v);
-		}
-	}
-	s_nxt = strchr(s, 's');
-	if (s_nxt != NULL) {
-		strncpy(v, s, s_nxt - s);
-		s_nxt = strrchr(v, ' ');
-		if (s_nxt != NULL) {
-			s_nxt = v;
-		}
-		*sec += atoi(v);
-	} else {
-		return -1;
-	}
+
+	return 0;
+
+}
+int proxy_uninit(simpleproxy_t* proxy)
+{
+	close(proxy->fd);
+	log_finish();
 
 	return 0;
 }
 
-static int parse_mode(config_t* conf, FILE* fp, char* mode)
+
+void* proxy_task_routine(void* args)
 {
-	char line[1024] = {0};
-	char* l = NULL;
+	proxy_thread_t* t = (proxy_thread_t*)args;
+	t->state = THREAD_STATE_ACTIVE;
 
-	if(strcasecmp(mode, "find-connect-new") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_NEW;
+	t->epfd = epoll_create1(EPOLL_CLOEXEC);
+	if(t->epfd <= 0) {
+		LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
+		t->state = THREAD_STATE_DEAD;
+		return NULL;
 	}
 
-	if(strcasecmp(mode, "find-connect-exist") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_EXIST;
+	if(pipe(t->fd) != 0) {
+		LOG_ERROR("thread create pipe failed.\n");
+		t->state = THREAD_STATE_DEAD;
+		return NULL;
 	}
 
-	if(strcasecmp(mode, "find-connect-packet") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_PACKET;
+	connection_t* con = &(t->proxy->conns[t->fd[0]]);
+	con->fd = t->fd[0];
+	con->state = CONN_STATE_CONNECTED;
+	con->type = CONN_TYPE_CLIENT;
+
+	if(epoll_add_fd(t->epfd, EPOLLIN, con) != 0) {
+		LOG_ERROR("epoll_add_fd failed.\n");
+		t->state = THREAD_STATE_DEAD;
+		return NULL;
 	}
 
-	int backend_cnt = 0;
-	backend_t backend[64];
-
-
-	bool end = false;
-	while(!feof(fp)) {
-		l = fgets(line, sizeof(line) - 1, fp);
-		conf->parse.line++;
-
-		l = trim(l);
-		if(*l == 0) {
-			continue;
-		}
-		if(*l == '}') {
-			if(backend_cnt == 0 && conf->pxy->backends == NULL) {
-				conf->parse.conf = strdup(mode);
-				conf->parse.error = strdup("work-mode missing backend");
-				return -1;
+	for (;;) {
+		int rv = epoll_wait(t->epfd, t->evts, t->nfd, EPOLL_TIMEOUT);
+		if(rv == 0) {
+			//lazy_timer_task(lazy);
+		}else if(rv < 0) {
+			if(errno == EINTR) {
+				if(t->proxy->sig_term) {
+					LOG_INFO("catch signal TERM\n");
+					break;
+				}
+				continue;
 			}
-			end = true;
+			LOG_ERROR("epoll_wait error, errno=%d\n", errno);
 			break;
-		}
-		if(*l == '#') {
-			if(skip_comment(conf, l, fp) != 0) {
-				return -1;
-			}
-			continue;
-		}
-		if(strncasecmp(l, "backend", strlen("backend")) == 0) {
-			if(backend_cnt >= sizeof(backend)/sizeof(backend[0])) {
-				if(conf->pxy->backends == NULL) {
-				    conf->pxy->backends = malloc(backend_cnt * sizeof(backend_t));
-				}else{
-					conf->pxy->backends = realloc(conf->pxy->backends, (backend_cnt + conf->pxy->backend_cnt)* sizeof(backend_t));
-				}
-				memcpy(conf->pxy->backends + conf->pxy->backend_cnt, backend, backend_cnt * sizeof(backend_t));
-
-				conf->pxy->backend_cnt += backend_cnt;
-			}
-			if(parse_backend(conf, &backend[backend_cnt], l) != 0) {
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("work-mode backend invalid");
-				return -1;
-			}
-			backend_cnt++;
-		}else {
-			char k[1024] = { 0 }, v[1024] = { 0 };
-			if (parse_kv(l, k, v) != 0) {
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("missing value");
-				return -1;
-			}
-
-			l = trim(v);
-
-			if (strcasecmp(k, "proxy-algorithm") == 0) {
-				if (conf->pxy->pxy_algo) {
-					free(conf->pxy->pxy_algo);
-					conf->pxy->pxy_algo = strdup(l);
-				}
-
-			} else if (strcasecmp(k, "packet-parser-plugin") == 0) {
-				conf->pxy->plugin_name = strdup(l);
-			}else{
-				conf->parse.conf = strdup(k);
-				conf->parse.error = strdup("unknown conf option");
-				return -1;
-			}
-		}
-	}
-	if(!end) {
-
-		conf->parse.conf = strdup(mode);
-		conf->parse.error = strdup("mode missing '}'");
-		return -1;
-	}
-	if(backend_cnt > 0) {
-		if(conf->pxy->backends == NULL) {
-		    conf->pxy->backends = malloc(backend_cnt * sizeof(backend_t));
 		}else{
-			conf->pxy->backends = realloc(conf->pxy->backends, (conf->pxy->backend_cnt + backend_cnt) * sizeof(backend_t));
-		}
-		memcpy(conf->pxy->backends + conf->pxy->backend_cnt, backend, backend_cnt * sizeof(backend_t));
+			for(int i=0;i<rv; i++) {
+				struct epoll_event* ev = &(t->evts[i]);
+				con = (connection_t*)ev->data.ptr;
 
-		conf->pxy->backend_cnt += backend_cnt;
-	}
-	return 0;
-}
+				if(con->fd == t->fd[0]) {
+					int fd = 0;
+					if(read(con->fd, &fd, sizeof(int)) != sizeof(int)) {
+						LOG_ERROR("pipe read failed.\n");
+						continue;
+					}
 
-int parse_conf(simpleproxy_t* proxy)
-{
-	tson_t* t = tson_parse_path(proxy->conf);
-	if(!t) {
-		printf("parse tson failed, file=%s\n", proxy->conf);
-		return -1;
-	}
+					LOG_INFO("thread accept: fd=%d\n", fd);
 
-	tson_t* s = NULL;
-	char* v = NULL;
-
-	TSON_READ_STR_MUST(t, "log-path", v, s);
-	proxy->log_path = strdup(v);
-	TSON_READ_STR_MUST(t, "log-level", v, s);
-	proxy->log_level = log_get_level(v);
-	TSON_READ_INT_MUST(t, "log-buf-size", proxy->log_buf_size, s);
-
-	TSON_READ_STR_MUST(t, "listen", v, s);
-	proxy->proto_v = __parse_addrinfo(v, &proxy->listen, &proxy->port);
-	if(proxy->proto_v < 0) {
-		printf("parse ip address failed.\n");
-		return -1;
-	}
-	TSON_READ_INT_MUST(t, "thread", proxy->thread_num, s);
-	if(proxy->thread_num <= 0) {
-
-	}
-	TSON_READ_STR_MUST(t, "idle-close-time", v, s);
-	if(__parse_time(v, &proxy->idle_to) < 0) {
-		printf("parse time failed.\n");
-		return -1;
-	}
-
-	tson_free(t);
+					tcp_nodelay(fd, true);
+					tcp_noblock(fd, true);
 
 
-	conf->pxy->idle_to = DEF_IDLE_TO;
-	conf->pxy->pxy_algo = strdup(DEF_PXY_ALGO);
+					con =  &(t->proxy->conns[fd]);
+					con->fd = fd;
+					con->type = CONN_TYPE_CLIENT;
+					con->state = CONN_STATE_CONNECTED;
 
-	while(!feof(fp)) {
-		l = fgets(line, sizeof(line) - 1, fp);
-		conf->parse.line++;
-
-		l = trim(l);
-
-		if(*l == 0) {
-			continue;
-		}
-
-		if(*l == '#') {
-			if(skip_comment(conf, l, fp) != 0) {
-				fclose(fp);
-				return -1;
-			}
-			continue;
-		}else{
-			char k[1024] = {0}, v[1024] = {0};
-			if(parse_kv(l, k, v) != 0) {
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("missing value");
-				fclose(fp);
-				return -1;
-			}
-			if(strcasecmp(k, "log-path-file") == 0) {
-				conf->log_file = strdup(v);
-			}else if(strcasecmp(k, "log-level") == 0) {
-				char* v_lower = to_lower(v);
-				if(strstr("debug info warn error off", v_lower) != NULL) {
-					conf->log_level = strdup(v_lower);
+					if(epoll_add_fd(t->epfd, EPOLLIN, con) < 0) {
+						LOG_ERROR("epoll_add_fd failed.\n");
+						close(fd);
+						continue;
+					}
 				}else{
-					conf->parse.conf = strdup(v);
-					conf->parse.error = strdup("log-level is not in (debug info warn error off)");
-					fclose(fp);
-					return -1;
+					//todo
 				}
-			}else if(strcasecmp(k, "daemon") == 0) {
-				conf->daemon = parse_bool(v);
-			}else if(strcasecmp(k, "listen") == 0) {
-				sa_family_t af;
-				char node[1024] = {0};
-				char port[1024] = {0};
-				if(parse_addrinfo(v, &af, node, port) != 0) {
-					conf->parse.conf = strdup(v);
-					conf->parse.error = strdup("ip address missing port or port is not valid)");
-					fclose(fp);
-					return -1;
-				}
-			    struct addrinfo hints = {
-			        .ai_family = af,
-			        .ai_socktype = SOCK_STREAM,
-			        .ai_flags = AI_PASSIVE
-			    };
-
-			    if(getaddrinfo(node, port, &hints, &conf->addrs) != 0) {
-					conf->parse.conf = strdup(v);
-					conf->parse.error = strdup("ip address is not valid/or unreachable");
-					fclose(fp);
-					return -1;
-			    }
-			}else if (strcasecmp(k, "idle-close-time") == 0) {
-				if(parse_time(v, &conf->pxy->idle_to) != 0 || conf->pxy->idle_to <= 0) {
-					conf->parse.conf = strdup(l);
-					conf->parse.error = strdup("time format in valid, h, m, s");
-					fclose(fp);
-					return -1;
-				}
-
-			} else if(strcasecmp(k, "work-mode") == 0) {
-				if(*(v + strlen(v) - 1) != '{') {
-					conf->parse.conf = strdup(k);
-					conf->parse.error = strdup("work-mode missing '{'");
-					fclose(fp);
-					return -1;
-				}
-				l = trim(v);
-
-				char k_m[1024] = {0}, v_m[1024] = {0};
-				if(parse_kv(v, k_m, v_m) != 0) {
-					conf->parse.conf = strdup(v);
-					conf->parse.error = strdup("work-mode missing 'mode', 'mode' in 'find-connect-new/find-connect-exist/find-connect-packet'");
-					fclose(fp);
-					return -1;
-				}
-				char* v_lower = to_lower(k_m);
-				if(strstr("find-connect-new find-connect-exist find-connect-packet", v_lower) == NULL) {
-					conf->parse.conf = strdup(k_m);
-					conf->parse.error = strdup("work-mode invalid, 'mode' in 'find-connect-new/find-connect-exist/find-connect-packet'");
-					fclose(fp);
-					return -1;
-				}
-
-				if(parse_mode(conf, fp, v_lower) != 0) {
-					fclose(fp);
-					return -1;
-				}
-			}else{
-
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("unknown conf option");
-				return -1;
 			}
 		}
 	}
-
-	fclose(fp);
-	return 0;
+	return NULL;
 }
-

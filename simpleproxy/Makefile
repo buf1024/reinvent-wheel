@@ -1,5 +1,5 @@
 CC = cc
-CCFLAGS = -I../common -O0 -Wall -Wextra -g -ggdb -fPIC -fpic
+CCFLAGS = -I../common -std=gnu99 -O0 -Wall -Wextra -g -ggdb -fPIC -fpic
 
 EXE = simpleproxy
 
@@ -11,7 +11,7 @@ EXT_CCFLAGS = -lpthread -L../common -lmylib
 all:$(EXE)
 
 $(EXE):$(OBJS)
-	$(CC) $(EXT_CCFLAGS) -o $@ $^
+	$(CC) -o $@ $^ $(EXT_CCFLAGS)
 
 clean:
 	rm -rf $(OBJS) 

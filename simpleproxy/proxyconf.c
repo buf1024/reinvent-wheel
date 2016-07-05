@@ -43,12 +43,12 @@ static int __parse_addrinfo(char* v, char** rt_ip, int* rt_port)
 
 	if(*v == '[') {
 		if(*(v+1) == ']') return -1;
-		col = strstr(v, ']');
+		col = strchr(v, ']');
 		if(col == NULL) return -1;
 
 		strncpy(ip, v + 1, col - v - 1);
 
-		col = strstr(col, ':');
+		col = strchr(col, ':');
 		if(col == NULL) return -1;
 
 		if(*(col + 1) == 0) return -1;
@@ -68,7 +68,7 @@ static int __parse_addrinfo(char* v, char** rt_ip, int* rt_port)
 	if(*rt_port <= 0) {
 		return -1;
 	}
-	rt_ip = strdup(__trim(ip));
+	*rt_ip = strdup(__trim(ip));
 
 	return proto_v;
 }
@@ -83,7 +83,7 @@ static int __parse_backend(char* v, proxy_backend_t* backend) {
 	strncpy(v_t, col, col_nxt - col);
 	backend->name = strdup(v_t);
 
-	col = trim(col_nxt); if(*col == 0) return -1;
+	col = __trim(col_nxt); if(*col == 0) return -1;
 	col_nxt = strchr(col, ' '); if(col_nxt == NULL) return -1;
 	strncpy(v_t, col, col_nxt - col);
 	backend->proto_v = __parse_addrinfo(v, &backend->addr, &backend->port);
@@ -92,7 +92,7 @@ static int __parse_backend(char* v, proxy_backend_t* backend) {
 		return -1;
 	}
 
-    col = trim(col_nxt); if(*col == 0) return -1;
+    col = __trim(col_nxt); if(*col == 0) return -1;
 	backend->weight = atoi(col);
 
 	if(backend->weight <= 0) {
@@ -143,112 +143,6 @@ static int __parse_time(char* l, int* sec)
 		return -1;
 	}
 
-	return 0;
-}
-
-static int parse_mode(config_t* conf, FILE* fp, char* mode)
-{
-	char line[1024] = {0};
-	char* l = NULL;
-
-	if(strcasecmp(mode, "find-connect-new") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_NEW;
-	}
-
-	if(strcasecmp(mode, "find-connect-exist") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_EXIST;
-	}
-
-	if(strcasecmp(mode, "find-connect-packet") == 0) {
-		conf->pxy->mode = WORK_MODE_CONNECT_PACKET;
-	}
-
-	int backend_cnt = 0;
-	backend_t backend[64];
-
-
-	bool end = false;
-	while(!feof(fp)) {
-		l = fgets(line, sizeof(line) - 1, fp);
-		conf->parse.line++;
-
-		l = trim(l);
-		if(*l == 0) {
-			continue;
-		}
-		if(*l == '}') {
-			if(backend_cnt == 0 && conf->pxy->backends == NULL) {
-				conf->parse.conf = strdup(mode);
-				conf->parse.error = strdup("work-mode missing backend");
-				return -1;
-			}
-			end = true;
-			break;
-		}
-		if(*l == '#') {
-			if(skip_comment(conf, l, fp) != 0) {
-				return -1;
-			}
-			continue;
-		}
-		if(strncasecmp(l, "backend", strlen("backend")) == 0) {
-			if(backend_cnt >= sizeof(backend)/sizeof(backend[0])) {
-				if(conf->pxy->backends == NULL) {
-				    conf->pxy->backends = malloc(backend_cnt * sizeof(backend_t));
-				}else{
-					conf->pxy->backends = realloc(conf->pxy->backends, (backend_cnt + conf->pxy->backend_cnt)* sizeof(backend_t));
-				}
-				memcpy(conf->pxy->backends + conf->pxy->backend_cnt, backend, backend_cnt * sizeof(backend_t));
-
-				conf->pxy->backend_cnt += backend_cnt;
-			}
-			if(parse_backend(conf, &backend[backend_cnt], l) != 0) {
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("work-mode backend invalid");
-				return -1;
-			}
-			backend_cnt++;
-		}else {
-			char k[1024] = { 0 }, v[1024] = { 0 };
-			if (parse_kv(l, k, v) != 0) {
-				conf->parse.conf = strdup(l);
-				conf->parse.error = strdup("missing value");
-				return -1;
-			}
-
-			l = trim(v);
-
-			if (strcasecmp(k, "proxy-algorithm") == 0) {
-				if (conf->pxy->pxy_algo) {
-					free(conf->pxy->pxy_algo);
-					conf->pxy->pxy_algo = strdup(l);
-				}
-
-			} else if (strcasecmp(k, "packet-parser-plugin") == 0) {
-				conf->pxy->plugin_name = strdup(l);
-			}else{
-				conf->parse.conf = strdup(k);
-				conf->parse.error = strdup("unknown conf option");
-				return -1;
-			}
-		}
-	}
-	if(!end) {
-
-		conf->parse.conf = strdup(mode);
-		conf->parse.error = strdup("mode missing '}'");
-		return -1;
-	}
-	if(backend_cnt > 0) {
-		if(conf->pxy->backends == NULL) {
-		    conf->pxy->backends = malloc(backend_cnt * sizeof(backend_t));
-		}else{
-			conf->pxy->backends = realloc(conf->pxy->backends, (conf->pxy->backend_cnt + backend_cnt) * sizeof(backend_t));
-		}
-		memcpy(conf->pxy->backends + conf->pxy->backend_cnt, backend, backend_cnt * sizeof(backend_t));
-
-		conf->pxy->backend_cnt += backend_cnt;
-	}
 	return 0;
 }
 
@@ -315,8 +209,8 @@ int parse_conf(simpleproxy_t* proxy)
 	}
 
 	tson_t* ss = NULL;
-	TSON_READ_STR_MUST(s, "proxy-algorithm", &proxy->algo, ss);
-	TSON_READ_STR_MUST(s, "proxy-plugin", &proxy->plugin_name, ss);
+	TSON_READ_STR_MUST(s, "proxy-algorithm", proxy->algo, ss);
+	TSON_READ_STR_OPT(s, "proxy-plugin", proxy->plugin_name, ss);
 
 	tson_free(t);
 

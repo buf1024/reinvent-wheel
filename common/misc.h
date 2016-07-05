@@ -40,6 +40,7 @@ int read_pid(pid_t* pid, const char* file);
 // hash
 uint32_t murmur(unsigned char *data, size_t len);
 unsigned short get_cpu_count(void);
+size_t get_max_open_file_count(void);
 
 // string
 int match(const char* text, const char* pattern);
