@@ -7,7 +7,7 @@
 
 #include "simpleproxy.h"
 
-static int __http_init(tson_t* tson)
+static int __http_init(simpleproxy_t* proxy, tson_t* tson)
 {
 	return 0;
 }
@@ -15,11 +15,11 @@ static int __http_uninit()
 {
 	return 0;
 }
-static int __http_parse_packet(const char* packet, char* sid, char* packet_new)
+static int __http_parse(const char* packet)
 {
 	return 0;
 }
-static int __http_proxy_packet(simpleproxy_t* proxy, proxy_backend_t** backend)
+static proxy_session_t* __http_proxy(simpleproxy_t* proxy, connection_t* con)
 {
 	return 0;
 }
@@ -29,8 +29,8 @@ proxy_plugin_t* proxy_plugin_http()
 	static proxy_plugin_t plugin = {
 			.init = __http_init,
 			.uninit = __http_uninit,
-			.parse_packet = __http_parse_packet,
-			.proxy_packet = __http_proxy_packet
+			.parse = __http_parse,
+			.proxy = __http_proxy
 	};
 
 	return &plugin;

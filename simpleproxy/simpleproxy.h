@@ -109,21 +109,22 @@ enum {
 struct proxy_plugin_s
 {
 	// = 0, ok
-	int (*init)(tson_t* tson);
+	int (*init)(simpleproxy_t* proxy, tson_t* tson);
 	int (*uninit)();
 
 	// = 0, not finish, > 0, finish, < 0 failed.
-	int (*parse_packet)(const char* packet, char* sid, char* packet_new);
+	int (*parse)(const char* packet);
 	// = 0, ok
-	int (*proxy_packet)(simpleproxy_t* proxy, proxy_backend_t** backend);
+	proxy_session_t* (*proxy)(simpleproxy_t* proxy, connection_t* con);
 };
 
 struct proxy_session_s
 {
 	connection_t* req_con;
-	connection_t* pxy_con;
+	connection_t* psp_con;
 
-	char* sid;
+	int state;
+	coro_t* coro;
 };
 
 struct proxy_backend_s
@@ -155,6 +156,8 @@ struct connection_s
 	int fd;
 	int type;
 	int state;
+
+	proxy_session_t* sess;
 };
 
 struct proxy_thread_s
@@ -206,6 +209,8 @@ struct simpleproxy_s
     bool sig_term;
     bool sig_usr1;
     bool sig_usr2;
+
+    coro_switcher_t switcher;
 };
 
 int parse_conf(simpleproxy_t* proxy);
