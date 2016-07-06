@@ -68,14 +68,14 @@
 	}while(0)
 
 
-#define DEF_IDLE_TO    60*60 /* 1 min */
-
-
 typedef struct proxy_plugin_s  proxy_plugin_t;
 typedef struct connection_s    connection_t;
 typedef struct simpleproxy_s   simpleproxy_t;
 typedef struct proxy_session_s proxy_session_t;
 typedef struct proxy_thread_s  proxy_thread_t;
+
+
+typedef proxy_plugin_t* (*plugin_create_fun_t)();
 
 
 enum {
@@ -97,6 +97,7 @@ enum {
 	LISTEN_BACK_LOG      = 128,
 	EPOLL_TIMEOUT        = 1000,
 	DEFAULT_IDEL_TIMEOUT = 3600,
+	DEFAULT_CORO_STACK   = 1024*16,
 };
 
 enum {
@@ -110,16 +111,16 @@ struct proxy_plugin_s
 	int (*init)(simpleproxy_t* proxy);
 	int (*uninit)();
 
-	// = 0, not finish, > 0, finish, < 0 failed.
-	int (*parse)(const char* packet);
 	// = 0, ok
-	proxy_session_t* (*proxy)(simpleproxy_t* proxy, connection_t* con);
+	int (*proxy)(proxy_session_t* session);
 };
 
 struct proxy_session_s
 {
+	proxy_thread_t* thread;
+
 	connection_t* req_con;
-	connection_t* psp_con;
+	connection_t* rsp_con;
 
 	int state;
 	coro_t* coro;
@@ -191,6 +192,11 @@ int proxy_init(simpleproxy_t* proxy);
 int proxy_uninit(simpleproxy_t* proxy);
 
 void* proxy_task_routine(void* args);
+
+int proxy_timer_task(proxy_thread_t* t);
+int proxy_biz_task(proxy_thread_t* t, connection_t* con);
+
+int proxy_coro_fun(coro_t* coro);
 
 
 #endif /* __SIMPLEPROXY_H__ */

@@ -96,6 +96,7 @@ int proxy_init(simpleproxy_t* proxy)
 		LOG_FATAL("listen server failed, host=%s, port=%d\n", proxy->listen, proxy->port);
 		return -1;
 	}
+	LOG_INFO("listening ip=%s, port=%d\n", proxy->listen, proxy->port);
 
 	proxy->nfd = get_max_open_file_count();
 	if(proxy->nfd <= 0) {
@@ -162,6 +163,13 @@ int proxy_init(simpleproxy_t* proxy)
 }
 int proxy_uninit(simpleproxy_t* proxy)
 {
+	if (proxy->plugin) {
+		if (proxy->plugin->uninit() != 0) {
+			LOG_ERROR("plugin init failed.\n");
+			//return -1;
+		}
+	}
+
 	close(proxy->fd);
 	log_finish();
 	return 0;
@@ -178,7 +186,9 @@ void* proxy_task_routine(void* args)
 	for (;;) {
 		int rv = epoll_wait(t->epfd, t->evts, t->nfd, EPOLL_TIMEOUT);
 		if(rv == 0) {
-			LOG_DEBUG("epoll_wait time out.\n");
+			if(proxy_timer_task(t) != 0) {
+				LOG_ERROR("proxy_timer_task failed.\n");
+			}
 		}else if(rv < 0) {
 			if(errno == EINTR) {
 				if(t->proxy->sig_term) {
@@ -216,12 +226,69 @@ void* proxy_task_routine(void* args)
 						close(fd);
 						continue;
 					}
-				}else{
-					//todo
 				}
+				if(proxy_biz_task(t, con) != 0) {
+					LOG_ERROR("proxy_biz_task failed.\n");
+				}
+				if(con->state == CONN_STATE_BROKEN) {
+					LOG_INFO("connection is broken, delete it.\n");
+					epoll_del_fd(t->epfd, con);
+				}
+
 			}
 		}
 	}
 	t->state = THREAD_STATE_DEAD;
 	return NULL;
+}
+
+int proxy_timer_task(proxy_thread_t* t)
+{
+	LOG_DEBUG("timer task tid=%d, timeout=%d\n", t->tid, EPOLL_TIMEOUT);
+	return 0;
+}
+int proxy_biz_task(proxy_thread_t* t, connection_t* con)
+{
+	proxy_session_t* session = con->sess;
+	if(!session) {
+		session = (proxy_session_t*)malloc(sizeof(*session));
+		if(!session) {
+			LOG_ERROR("allocate session failed.\n");
+			return -1;
+		}
+		session->coro = coro_new2(&t->proxy->switcher, proxy_coro_fun, session, DEFAULT_CORO_STACK);
+		if(!session->coro) {
+			LOG_ERROR("coro create failed.\n");
+			return -1;
+		}
+
+		session->req_con = con;
+		session->state = CORO_RESUME;
+		session->thread = t;
+		con->sess = session;
+	}
+	if(session->state == CORO_RESUME) {
+		session->state = coro_resume(session->coro);
+	}
+
+	if(session->state == CORO_ABORT || session->state == CORO_FINISH) {
+		LOG_DEBUG("coro finish, state = %d\n", session->state);
+		con->sess = NULL;
+		coro_free(session->coro);
+		free(session);
+	}
+
+	return 0;
+}
+int proxy_coro_fun(coro_t* coro)
+{
+	LOG_INFO("invoke coro function!\n");
+	proxy_session_t* session = (proxy_session_t*)coro_get_data(coro);
+	proxy_plugin_t* plugin = session->thread->proxy->plugin;
+
+	int state = plugin->proxy(session);
+	if(state == CORO_RESUME) {
+		coro_yield_value(session->coro, CORO_RESUME);
+	}
+	return state;
 }

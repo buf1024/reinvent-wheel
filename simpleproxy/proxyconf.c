@@ -53,10 +53,15 @@ int parse_conf(simpleproxy_t* proxy)
 	strcat(proxy->plugin_name, v);
 
 	printf("load plugin %s\n", proxy->plugin_name);
-	proxy->plugin = find_symbol(proxy->plugin_name);
+	plugin_create_fun_t fun = find_symbol(proxy->plugin_name);
 
-	if(!proxy->plugin) {
+	if(!fun) {
 		printf("load plugin %s failed.\n", proxy->plugin_name);
+		return -1;
+	}
+	proxy->plugin = fun();
+	if(!proxy->plugin) {
+		printf("create plugin %s failed.\n", proxy->plugin_name);
 		return -1;
 	}
 

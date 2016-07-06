@@ -9,19 +9,24 @@
 
 static int __dummy_init(simpleproxy_t* proxy)
 {
+	(void)proxy;
     return 0;
 }
 static int __dummy_uninit()
 {
     return 0;
 }
-static int __dummy_parse(const char* packet)
+
+static int __dummy_proxy(proxy_session_t* session)
 {
-    return 0;
-}
-static proxy_session_t* __dummy_proxy(simpleproxy_t* proxy, connection_t* con)
-{
-    return 0;
+	connection_t* con = session->req_con;
+
+	char buf[1024] = {0};
+	bool ok;
+	tcp_read(con->fd, buf, 1024, &ok);
+	LOG_DEBUG("dummy read: %s\n", buf);
+
+    return CORO_FINISH;
 }
 
 proxy_plugin_t* simple_proxy_plugin_dummy()
@@ -29,7 +34,6 @@ proxy_plugin_t* simple_proxy_plugin_dummy()
     static proxy_plugin_t plugin = {
             .init = __dummy_init,
             .uninit = __dummy_uninit,
-            .parse = __dummy_parse,
             .proxy = __dummy_proxy
     };
 
