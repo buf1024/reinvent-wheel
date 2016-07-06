@@ -71,12 +71,12 @@ int main(int argc, char **argv)
     struct option opts[] = {
     		{.name = "test", .has_arg = optional_argument, .val = 't'},
     		{.name = "conf", .has_arg = optional_argument, .val = 'c'},
-    		{.name = "exclude", .has_arg = optional_argument, .val = 'e'},
+    		{.name = "exclude", .has_arg = no_argument, .val = 'e'},
     		{.name = "help", .has_arg = no_argument, .val = 'h'},
 			{0, 0, 0, 0}
     };
 
-    while ((opt = getopt_long(argc, argv, "t:c:h", opts, &opt_idx)) != -1) {
+    while ((opt = getopt_long(argc, argv, "t:c:eh", opts, &opt_idx)) != -1) {
         switch (opt) {
           case 't':
               test_conf(optarg);
@@ -119,17 +119,22 @@ int main(int argc, char **argv)
     	daemonlize();
     }
 
-    REGISTER_SIGNAL(SIGTERM, sign_handler, 0);
-    REGISTER_SIGNAL(SIGINT, sign_handler, 0);
-    REGISTER_SIGNAL(SIGUSR1, sign_handler, 0);
-    REGISTER_SIGNAL(SIGUSR2, sign_handler, 0);
+    REGISTER_SIGNAL(SIGTERM, sign_handler, 1);
+    REGISTER_SIGNAL(SIGINT, sign_handler, 1);
+    REGISTER_SIGNAL(SIGUSR1, sign_handler, 1);
+    REGISTER_SIGNAL(SIGUSR2, sign_handler, 1);
+
+	if (parse_conf(&proxy) != 0) {
+		printf("configure file error.\n");
+		exit(-1);
+	}
 
     if(proxy_init(&proxy) != 0) {
     	printf("proxy_init failed.\n");
     	exit(-1);
     }
     LOG_INFO("proxy init!\n");
-    LOG_INFO("proxy start main loop..\n");
+    LOG_INFO("proxy start main loop...\n");
 
     proxy_main_loop(&proxy);
 

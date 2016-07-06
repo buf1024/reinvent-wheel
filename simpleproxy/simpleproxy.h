@@ -136,7 +136,7 @@ struct proxy_backend_s
 	int   proto_v;
 	int   weight;
 
-	connection_t* conn;
+	connection_t* con;
 
 	// static info
 	int  attach_cnt;

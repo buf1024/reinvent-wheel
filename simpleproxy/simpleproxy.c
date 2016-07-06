@@ -16,7 +16,7 @@ int schedule_fd(simpleproxy_t* proxy, int fd)
 
 	LOG_INFO("select thread %d to handle.\n", index);
 
-	if(write(t->fd[0], &fd, sizeof(int)) != sizeof(int)) {
+	if(write(t->fd[1], &fd, sizeof(int)) != sizeof(int)) {
 		LOG_ERROR("write fd to client failed.\n");
 		return -1;
 	}
@@ -36,13 +36,13 @@ int proxy_main_loop(simpleproxy_t* proxy)
 		if(fd < 0) {
 			if(proxy->sig_term) {
 				LOG_INFO("catch quit signal.\n");
-				proxy->sig_term = false;
 				break;
 			}
 			if(proxy->sig_usr1) {
 				proxy->sig_usr1 = false;
 			}
 			if(proxy->sig_usr2) {
+				LOG_DEBUG("log flush.\n");
 				log_flush();
 				proxy->sig_usr2 = false;
 			}
@@ -102,7 +102,7 @@ int proxy_init(simpleproxy_t* proxy)
 		LOG_FATAL("get_max_open_file_count failed.\n");
 		return -1;
 	}
-	LOG_INFO("max open file: %ul\n", proxy->nfd);
+	LOG_INFO("max open file: %u\n", proxy->nfd);
 	proxy->conns = calloc(proxy->nfd, sizeof(connection_t));
 	if(!proxy->conns) {
 		LOG_FATAL("alloc connection failed.\n");
@@ -127,6 +127,27 @@ int proxy_init(simpleproxy_t* proxy)
 		}
 		t->state = THREAD_STATE_DEAD;
 
+		t->epfd = epoll_create1(EPOLL_CLOEXEC);
+		if(t->epfd <= 0) {
+			LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
+			return -1;
+		}
+
+		if(pipe(t->fd) != 0) {
+			LOG_ERROR("thread create pipe failed.\n");
+			return -1;
+		}
+
+		connection_t* con = &(proxy->conns[t->fd[0]]);
+		con->fd = t->fd[0];
+		con->state = CONN_STATE_CONNECTED;
+		con->type = CONN_TYPE_CLIENT;
+
+		if(epoll_add_fd(t->epfd, EPOLLIN, con) != 0) {
+			LOG_ERROR("epoll_add_fd failed.\n");
+			return -1;
+		}
+
 		pthread_create(&t->tid, NULL, proxy_task_routine, t);
 		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
@@ -138,7 +159,6 @@ int proxy_uninit(simpleproxy_t* proxy)
 {
 	close(proxy->fd);
 	log_finish();
-
 	return 0;
 }
 
@@ -148,38 +168,13 @@ void* proxy_task_routine(void* args)
 	proxy_thread_t* t = (proxy_thread_t*)args;
 	t->state = THREAD_STATE_ACTIVE;
 
-	t->epfd = epoll_create1(EPOLL_CLOEXEC);
-	if(t->epfd <= 0) {
-		LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
-		t->state = THREAD_STATE_DEAD;
-		return NULL;
-	}
-
-	if(pipe(t->fd) != 0) {
-		LOG_ERROR("thread create pipe failed.\n");
-		t->state = THREAD_STATE_DEAD;
-		return NULL;
-	}
-
-	connection_t* con = &(t->proxy->conns[t->fd[0]]);
-	con->fd = t->fd[0];
-	con->state = CONN_STATE_CONNECTED;
-	con->type = CONN_TYPE_CLIENT;
-
-	if(epoll_add_fd(t->epfd, EPOLLIN, con) != 0) {
-		LOG_ERROR("epoll_add_fd failed.\n");
-		t->state = THREAD_STATE_DEAD;
-		return NULL;
-	}
-
 	for (;;) {
 		int rv = epoll_wait(t->epfd, t->evts, t->nfd, EPOLL_TIMEOUT);
 		if(rv == 0) {
-			//lazy_timer_task(lazy);
+			LOG_DEBUG("epoll_wait time out.\n");
 		}else if(rv < 0) {
 			if(errno == EINTR) {
 				if(t->proxy->sig_term) {
-					LOG_INFO("catch signal TERM\n");
 					break;
 				}
 				continue;
@@ -220,5 +215,6 @@ void* proxy_task_routine(void* args)
 			}
 		}
 	}
+	t->state = THREAD_STATE_DEAD;
 	return NULL;
 }
