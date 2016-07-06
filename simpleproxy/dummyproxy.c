@@ -7,7 +7,7 @@
 
 #include "simpleproxy.h"
 
-static int __dummy_init(simpleproxy_t* proxy, tson_t* tson)
+static int __dummy_init(simpleproxy_t* proxy)
 {
     return 0;
 }
@@ -24,7 +24,7 @@ static proxy_session_t* __dummy_proxy(simpleproxy_t* proxy, connection_t* con)
     return 0;
 }
 
-proxy_plugin_t* proxy_plugin_dummy()
+proxy_plugin_t* simple_proxy_plugin_dummy()
 {
     static proxy_plugin_t plugin = {
             .init = __dummy_init,

@@ -8,6 +8,7 @@
 #ifndef __SIMPLEPROXY_H__
 #define __SIMPLEPROXY_H__
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <dlfcn.h>
 
 
 #include "tson.h"
@@ -26,6 +28,7 @@
 #include "misc.h"
 #include "sock.h"
 
+#include "proxyutil.h"
 
 #define TSON_READ_STR_MUST(t, k, v, st) \
 	do { \
@@ -66,21 +69,14 @@
 
 
 #define DEF_IDLE_TO    60*60 /* 1 min */
-#define DEF_PXY_ALGO   "default"
 
 
-typedef struct proxy_backend_s proxy_backend_t;
 typedef struct proxy_plugin_s  proxy_plugin_t;
 typedef struct connection_s    connection_t;
 typedef struct simpleproxy_s   simpleproxy_t;
 typedef struct proxy_session_s proxy_session_t;
 typedef struct proxy_thread_s  proxy_thread_t;
 
-
-enum {
-	WORK_MODE_CONNECT_NEW,
-	WORK_MODE_CONNECT_PACKET,
-};
 
 enum {
 	CONN_TYPE_SERVER,
@@ -97,8 +93,10 @@ enum {
 enum {
 	PROTO_IPV4 = 4,
 	PROTO_IPV6 = 6,
-	LISTEN_BACK_LOG = 128,
-	EPOLL_TIMEOUT = 1000,
+
+	LISTEN_BACK_LOG      = 128,
+	EPOLL_TIMEOUT        = 1000,
+	DEFAULT_IDEL_TIMEOUT = 3600,
 };
 
 enum {
@@ -109,7 +107,7 @@ enum {
 struct proxy_plugin_s
 {
 	// = 0, ok
-	int (*init)(simpleproxy_t* proxy, tson_t* tson);
+	int (*init)(simpleproxy_t* proxy);
 	int (*uninit)();
 
 	// = 0, not finish, > 0, finish, < 0 failed.
@@ -125,30 +123,6 @@ struct proxy_session_s
 
 	int state;
 	coro_t* coro;
-};
-
-struct proxy_backend_s
-{
-	simpleproxy_t* proxy;
-
-	char* name;
-	char* addr;
-	int   port;
-	int   proto_v;
-	int   weight;
-
-	connection_t* con;
-
-	// static info
-	int  attach_cnt;
-    int  attach_total;
-
-	unsigned long pxy_packet_cnt;
-	unsigned long pxy_packet_succ_cnt;
-	unsigned long pxy_packet_fail_cnt;
-	unsigned long pxy_bytes;
-
-	time_t up_time;
 };
 
 struct connection_s
@@ -192,11 +166,6 @@ struct simpleproxy_s
 	int   idle_to;
 	int   mode;
 
-	int backend_cnt;
-	proxy_backend_t* backends;
-
-
-	char* algo;
 	char* plugin_name;
 	proxy_plugin_t* plugin;
 
@@ -223,8 +192,5 @@ int proxy_uninit(simpleproxy_t* proxy);
 
 void* proxy_task_routine(void* args);
 
-int epoll_add_fd(int epfd, int evt, connection_t* con);
-int epoll_mod_fd(int epfd, int evt, connection_t* con);
-int epoll_del_fd(int epfd, connection_t* con);
 
 #endif /* __SIMPLEPROXY_H__ */

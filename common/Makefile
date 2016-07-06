@@ -13,7 +13,7 @@ OBJS=$(patsubst %.c,%.o,$(wildcard *.c)) \
 	 $(patsubst %.c,%.o,$(wildcard sftp/*.c)) \
 	 $(patsubst %.c,%.o,$(wildcard crypt/*.c))
 
-EXT_CCFLAGS = -fpic -fPIC -lpthread -lcrypto
+EXT_CCFLAGS = -fpic -fPIC -lpthread -lcrypto -ldl
 
 all:$(MYLIB)
 

@@ -252,7 +252,6 @@ size_t get_max_open_file_count(void)
 
 
 
-
 /*
  * Routine to see if a text string is matched by a wildcard pattern.
  * Returns 1 if the text is matched, or 0 if it is not matched

@@ -152,6 +152,11 @@ int proxy_init(simpleproxy_t* proxy)
 		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
 
+	if(proxy->plugin->init(proxy) != 0) {
+		LOG_ERROR("plugin init failed.\n");
+		return -1;
+	}
+
 	return 0;
 
 }
@@ -167,6 +172,8 @@ void* proxy_task_routine(void* args)
 {
 	proxy_thread_t* t = (proxy_thread_t*)args;
 	t->state = THREAD_STATE_ACTIVE;
+
+	connection_t* con = NULL;
 
 	for (;;) {
 		int rv = epoll_wait(t->epfd, t->evts, t->nfd, EPOLL_TIMEOUT);

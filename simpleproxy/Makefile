@@ -6,7 +6,7 @@ EXE = simpleproxy
 OBJS=$(patsubst %.c,%.o,$(wildcard *.c))
 
 
-EXT_CCFLAGS = -lpthread -L../common -lmylib
+EXT_CCFLAGS = -rdynamic -lpthread -ldl -L../common -lmylib
 
 all:$(EXE)
 

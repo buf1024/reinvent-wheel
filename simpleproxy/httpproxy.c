@@ -7,7 +7,7 @@
 
 #include "simpleproxy.h"
 
-static int __http_init(simpleproxy_t* proxy, tson_t* tson)
+static int __http_init(simpleproxy_t* proxy)
 {
 	return 0;
 }
@@ -24,7 +24,7 @@ static proxy_session_t* __http_proxy(simpleproxy_t* proxy, connection_t* con)
 	return 0;
 }
 
-proxy_plugin_t* proxy_plugin_http()
+proxy_plugin_t* simple_proxy_plugin_http()
 {
 	static proxy_plugin_t plugin = {
 			.init = __http_init,
