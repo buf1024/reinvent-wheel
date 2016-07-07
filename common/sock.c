@@ -539,6 +539,32 @@ int tcp_write(int fd, char *buf, int count, bool* ok) {
 	}
 	return totlen;
 }
+int tcp_block_write(int fd, char *buf, int count, bool* ok)
+{
+	int nwritten, totlen = 0;
+	*ok = true;
+	while (totlen != count) {
+		nwritten = write(fd, buf, count - totlen);
+		if (nwritten == 0) {
+			printf("send data = 0, connection close, fd=%d\n", fd);
+			*ok = false;
+			break;
+		}
+		if (nwritten == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
+			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+				continue;
+			}
+			*ok = false;
+			break;
+		}
+		totlen += nwritten;
+		buf += nwritten;
+	}
+	return totlen;
+}
 
 int tcp_peer_name(int fd, char *ip, size_t ip_len, int *port) {
 	struct sockaddr_storage sa;

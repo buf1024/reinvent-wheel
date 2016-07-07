@@ -21,10 +21,18 @@ static int __dummy_proxy(proxy_session_t* session)
 {
 	connection_t* con = session->req_con;
 
-	char buf[1024] = {0};
-	bool ok;
-	tcp_read(con->fd, buf, 1024, &ok);
-	LOG_DEBUG("dummy read: %s\n", buf);
+	if(con->rbuf->size) {
+	    LOG_DEBUG("dummy read(%d): %s\n", con->rbuf->size, con->rbuf->cache);
+
+	    session->rsp_con = con;
+
+	    memcpy(con->wbuf->cache, con->rbuf->cache, con->rbuf->size);
+	    con->wbuf->size = con->rbuf->size;
+
+	    buffer_set_read_size(con->rbuf, con->rbuf->size);
+
+	    LOG_DEBUG("dummy write(%d): %s\n", con->wbuf->size, con->wbuf->cache);
+	}
 
     return CORO_FINISH;
 }

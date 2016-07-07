@@ -163,4 +163,18 @@ int parse_time(char* l, int* sec)
 	return 0;
 }
 
+int buffer_set_read_size(buffer_t* buf, int size)
+{
+	buf->size -= size;
+	if(buf->size > 0) {
+		memmove(buf->cache, buf->cache + size, buf->size);
+	}
+	return buf->size;
+}
+int buffer_set_write_size(buffer_t* buf, int size)
+{
+	buf->size += size;
+	return buf->size;
+}
+
 

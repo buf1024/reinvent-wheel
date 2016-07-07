@@ -220,6 +220,17 @@ void* proxy_task_routine(void* args)
 					con->fd = fd;
 					con->type = CONN_TYPE_CLIENT;
 					con->state = CONN_STATE_CONNECTED;
+					con->sess = NULL;
+					if(!con->rbuf) {
+						con->rbuf = (buffer_t*)malloc(sizeof(buffer_t));
+						con->rbuf->cache = (char*)malloc(DEFAULT_BUF_SIZE);
+					}
+					con->rbuf->size = 0;
+					if(!con->wbuf) {
+						con->wbuf = (buffer_t*)malloc(sizeof(buffer_t));
+						con->wbuf->cache = (char*)malloc(DEFAULT_BUF_SIZE);
+					}
+					con->wbuf->size = 0;
 
 					if(epoll_add_fd(t->epfd, EPOLLIN, con) < 0) {
 						LOG_ERROR("epoll_add_fd failed.\n");
@@ -233,6 +244,7 @@ void* proxy_task_routine(void* args)
 				if(con->state == CONN_STATE_BROKEN) {
 					LOG_INFO("connection is broken, delete it.\n");
 					epoll_del_fd(t->epfd, con);
+					close(con->fd);
 				}
 
 			}
@@ -244,11 +256,22 @@ void* proxy_task_routine(void* args)
 
 int proxy_timer_task(proxy_thread_t* t)
 {
-	LOG_DEBUG("timer task tid=%d, timeout=%d\n", t->tid, EPOLL_TIMEOUT);
+	LOG_DEBUG("timer task tid=%ld, timeout=%d\n", t->tid, EPOLL_TIMEOUT);
 	return 0;
 }
 int proxy_biz_task(proxy_thread_t* t, connection_t* con)
 {
+	bool ok = false;
+	con->rbuf->size += tcp_read(con->fd, con->rbuf->cache, DEFAULT_BUF_SIZE - con->rbuf->size, &ok);
+	if(!ok) {
+		con->state = CONN_STATE_BROKEN;
+		return -1;
+	}
+	if(con->rbuf->size <= 0) {
+		LOG_DEBUG("conn size <= 0");
+		return 0;
+	}
+
 	proxy_session_t* session = con->sess;
 	if(!session) {
 		session = (proxy_session_t*)malloc(sizeof(*session));
@@ -271,11 +294,40 @@ int proxy_biz_task(proxy_thread_t* t, connection_t* con)
 		session->state = coro_resume(session->coro);
 	}
 
-	if(session->state == CORO_ABORT || session->state == CORO_FINISH) {
-		LOG_DEBUG("coro finish, state = %d\n", session->state);
+	connection_t* rsp_con = session->rsp_con;
+
+	if(session->state == CORO_ABORT) {
+		LOG_DEBUG("coro abort!\n");
 		con->sess = NULL;
 		coro_free(session->coro);
 		free(session);
+		session = NULL;
+	}else {
+		if(rsp_con && rsp_con->wbuf->size) {
+			buffer_t* w = session->rsp_con->wbuf;
+			tcp_block_write(rsp_con->fd, w->cache, w->size, &ok);
+			if(!ok) {
+				rsp_con->state = CONN_STATE_BROKEN;
+			}
+		}
+		LOG_DEBUG("coro state = %d\n", session->state);
+		if(session->state == CORO_FINISH) {
+			con->sess = NULL;
+			coro_free(session->coro);
+			free(session);
+			session = NULL;
+		}
+	}
+
+	if(con->state == CONN_STATE_BROKEN) {
+		LOG_INFO("connetion state broken, delete it.\n");
+		epoll_del_fd(t->epfd, con);
+		close(con->fd);
+	}
+	if(rsp_con && rsp_con != con && con->state == CONN_STATE_BROKEN) {
+		LOG_INFO("connetion state broken, delete it.\n");
+		epoll_del_fd(t->epfd, rsp_con);
+		close(rsp_con->fd);
 	}
 
 	return 0;

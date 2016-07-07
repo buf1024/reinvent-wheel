@@ -70,6 +70,7 @@
 
 typedef struct proxy_plugin_s  proxy_plugin_t;
 typedef struct connection_s    connection_t;
+typedef struct buffer_s        buffer_t;
 typedef struct simpleproxy_s   simpleproxy_t;
 typedef struct proxy_session_s proxy_session_t;
 typedef struct proxy_thread_s  proxy_thread_t;
@@ -98,6 +99,7 @@ enum {
 	EPOLL_TIMEOUT        = 1000,
 	DEFAULT_IDEL_TIMEOUT = 3600,
 	DEFAULT_CORO_STACK   = 1024*16,
+	DEFAULT_BUF_SIZE     = 1024
 };
 
 enum {
@@ -133,6 +135,14 @@ struct connection_s
 	int state;
 
 	proxy_session_t* sess;
+
+	buffer_t* rbuf;
+	buffer_t* wbuf;
+};
+struct buffer_s
+{
+	int size;
+	char* cache;
 };
 
 struct proxy_thread_s
