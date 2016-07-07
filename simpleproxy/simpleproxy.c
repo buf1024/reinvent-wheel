@@ -262,17 +262,26 @@ int proxy_timer_task(proxy_thread_t* t)
 int proxy_biz_task(proxy_thread_t* t, connection_t* con)
 {
 	bool ok = false;
-	con->rbuf->size += tcp_read(con->fd, con->rbuf->cache, DEFAULT_BUF_SIZE - con->rbuf->size, &ok);
-	if(!ok) {
-		con->state = CONN_STATE_BROKEN;
-		return -1;
-	}
-	if(con->rbuf->size <= 0) {
-		LOG_DEBUG("conn size <= 0");
-		return 0;
+	if (con->state == CONN_STATE_CONNECTED) {
+		con->rbuf->size += tcp_read(con->fd, con->rbuf->cache, DEFAULT_BUF_SIZE - con->rbuf->size, &ok);
+		if (!ok) {
+			con->state = CONN_STATE_BROKEN;
+			if (con->sess) {
+				coro_free(con->sess->coro);
+				free(con->sess);
+				con->sess = NULL;
+			}
+			con->rbuf->size = 0;
+			con->wbuf->size = 0;
+			return -1;
+		}
+		if (con->rbuf->size <= 0) {
+			LOG_DEBUG("conn size <= 0");
+			return 0;
+		}
 	}
 
-	proxy_session_t* session = con->sess;
+	proxy_session_t* session = t->proxy->plugin->session(con);
 	if(!session) {
 		session = (proxy_session_t*)malloc(sizeof(*session));
 		if(!session) {
@@ -294,7 +303,11 @@ int proxy_biz_task(proxy_thread_t* t, connection_t* con)
 		session->state = coro_resume(session->coro);
 	}
 
+
+	if(con->state != CONN_STATE_CONNECTED) return 0;
+
 	connection_t* rsp_con = session->rsp_con;
+
 
 	if(session->state == CORO_ABORT) {
 		LOG_DEBUG("coro abort!\n");
@@ -323,12 +336,29 @@ int proxy_biz_task(proxy_thread_t* t, connection_t* con)
 		LOG_INFO("connetion state broken, delete it.\n");
 		epoll_del_fd(t->epfd, con);
 		close(con->fd);
+		if(session) {
+			con->sess = NULL;
+			coro_free(session->coro);
+			free(session);
+			session = NULL;
+		}
+		con->rbuf->size = 0;
+		con->wbuf->size = 0;
 	}
 	if(rsp_con && rsp_con != con && con->state == CONN_STATE_BROKEN) {
 		LOG_INFO("connetion state broken, delete it.\n");
 		epoll_del_fd(t->epfd, rsp_con);
 		close(rsp_con->fd);
+		if(session) {
+			rsp_con->sess = NULL;
+			coro_free(session->coro);
+			free(session);
+			session = NULL;
+		}
+		rsp_con->rbuf->size = 0;
+		rsp_con->wbuf->size = 0;
 	}
+
 
 	return 0;
 }

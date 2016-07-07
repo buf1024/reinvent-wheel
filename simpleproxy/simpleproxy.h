@@ -86,9 +86,10 @@ enum {
 
 enum {
 	CONN_STATE_LISTENING,
-	CONN_STATE_CONNECTIN,
+	CONN_STATE_CONNECTING,
 	CONN_STATE_CONNECTED,
 	CONN_STATE_BROKEN,
+	CONN_STATE_RESOLVING,
 };
 
 enum {
@@ -113,6 +114,7 @@ struct proxy_plugin_s
 	int (*init)(simpleproxy_t* proxy);
 	int (*uninit)();
 
+	proxy_session_t* (*session)(connection_t* con);
 	// = 0, ok
 	int (*proxy)(proxy_session_t* session);
 };

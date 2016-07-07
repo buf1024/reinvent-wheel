@@ -10,11 +10,19 @@
 static int __dummy_init(simpleproxy_t* proxy)
 {
 	(void)proxy;
+
+	LOG_INFO("dummy proxy plugin init.\n");
+
     return 0;
 }
 static int __dummy_uninit()
 {
     return 0;
+}
+
+static proxy_session_t* __dummy_session(connection_t* con)
+{
+	return con->sess;
 }
 
 static int __dummy_proxy(proxy_session_t* session)
@@ -42,6 +50,7 @@ proxy_plugin_t* simple_proxy_plugin_dummy()
     static proxy_plugin_t plugin = {
             .init = __dummy_init,
             .uninit = __dummy_uninit,
+			.session = __dummy_session,
             .proxy = __dummy_proxy
     };
 
