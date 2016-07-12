@@ -20,37 +20,16 @@ extern "C" {
 #define AF_LOCAL AF_UNIX
 #endif
 
-enum {
-    RESOLV_HOST_SIZE = 128,
-    RESOLV_ADDR_SIZE = 64,
-};
-
-typedef struct resov_data_s resov_data_t;
-
-struct resov_data_s
-{
-    char host[RESOLV_HOST_SIZE];
-    char addr[RESOLV_ADDR_SIZE];
-    int  thread;
-    bool resov;;
-    void* data;
-};
-
 // tcp
 int tcp_resolve(char *host, char *ipbuf, size_t ipbuf_len);
-int tcp_noblock_resolve(resov_data_t* resov);
-int tcp_noblock_resolve_pollfd();
-resov_data_t* tcp_noblock_resolve_result();
 int tcp_resolve_ip(char *host, char *ipbuf, size_t ipbuf_len);
 int tcp_server(char *bindaddr, int port, int backlog);
 int tcp6_server(char *bindaddr, int port, int backlog);
 int tcp_accept(int serversock, char *ip, size_t ip_len, int *port);
 int tcp_connect(char *addr, int port);
 int tcp_noblock_connect(char *addr, int port);
-int tcp_read(int fd, char *buf, int count, bool* ok);
-int tcp_read_needle(int fd, const char* needle, char *buf, int count, bool* ok);
-int tcp_write(int fd, char *buf, int count, bool* ok);
-int tcp_block_write(int fd, char *buf, int count, bool* ok);
+int tcp_read(int fd, char *buf, int count, bool block, bool* ok);
+int tcp_write(int fd, char *buf, int count, bool block, bool* ok);
 int tcp_peer_name(int fd, char *ip, size_t ip_len, int *port);
 int tcp_sock_name(int fd, char *ip, size_t ip_len, int *port);
 

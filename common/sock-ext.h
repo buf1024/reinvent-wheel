@@ -12,10 +12,11 @@
 extern "C" {
 #endif
 
-#include "coro.h"
-#include <stdbool.h>
+#include "sock.h"
 
-int tcp_noblock_resolve_coro(coro_t* coro);
+int tcp_noblock_resolve(const char* host, void* data, int thread);
+bool tcp_noblock_resolve_result(char** host, char** addr, void** data);
+int tcp_noblock_resolve_fd();
 
 
 #ifdef __cplusplus

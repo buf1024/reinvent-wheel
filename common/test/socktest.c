@@ -55,7 +55,7 @@ static int server_test()
 		char buf[1024] = {0};
 		while(1) {
 			bool ok;
-			int rd = tcp_read(cfd, buf, sizeof(buf) - 1, &ok);
+			int rd = tcp_read(cfd, buf, sizeof(buf) - 1, false, &ok);
 			if(rd > 0) {
 				printf("READ: \n%s\n", buf);
 				memset(buf, 0, rd);
@@ -101,7 +101,7 @@ static int client_test()
 			"\r\n\r\n";
 
 	bool broken;
-	ret = tcp_write(s, packe, sizeof(packe), &broken);
+	ret = tcp_write(s, packe, sizeof(packe), false, &broken);
 	if(ret != sizeof(packe)) {
 		close(s);
 		printf("tcp_write failed.\n");
@@ -111,7 +111,7 @@ static int client_test()
 	char buf[1024] = {0};
 
 	while(1) {
-	    ret = tcp_read(s, buf, sizeof(buf) - 1, &broken);
+	    ret = tcp_read(s, buf, sizeof(buf) - 1, false, &broken);
 	    if(ret > 0) {
 	    	printf("READ: \n%s\n", buf);
 	    }

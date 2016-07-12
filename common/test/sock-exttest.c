@@ -5,10 +5,7 @@
  *      Author: Luo Guochun
  */
 
-#include "sock.h"
-#include "coro.h"
-#include "queue.h"
-
+#include "sock-ext.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,52 +55,29 @@ static void sigusr2(int signo) {
 	g_usr2 = 1;
 }
 
-typedef struct resov_node_s
-{
-    coro_t* coro;
-    SLIST_ENTRY(resov_node_s) next;
-}resov_node_t;
-
-typedef SLIST_HEAD(_queue, resov_node_s) resov_t;
 
 int main(int argc, char **argv) {
 
-    REGISTER_SIGNAL(SIGTERM, sigterm, 0);//Kill信号
-    REGISTER_SIGNAL(SIGINT, sigterm, 0);//终端CTRL-C信号
-    REGISTER_SIGNAL(SIGUSR2, sigusr2, 0);//SIGUSR2信号
+    REGISTER_SIGNAL(SIGTERM, sigterm, 1);//Kill信号
+    REGISTER_SIGNAL(SIGINT, sigterm, 1);//终端CTRL-C信号
+    REGISTER_SIGNAL(SIGUSR2, sigusr2, 1);//SIGUSR2信号
 
 
-    resov_data_t* d = NULL;
     int fd = 0;
 
-    d = (resov_data_t*)malloc(sizeof(*d));
-    memset(d, 0, sizeof(*d));
-    strcpy(d->host, "python.org");
-    d->thread = 0;
-    fd = tcp_noblock_resolve(d);
-
-    d = (resov_data_t*)malloc(sizeof(*d));
-    memset(d, 0, sizeof(*d));
-    strcpy(d->host, "baidu.com");
-    fd = tcp_noblock_resolve(d);
-
-    d = (resov_data_t*)malloc(sizeof(*d));
-    memset(d, 0, sizeof(*d));
-    strcpy(d->host, "aaagoogleyyasdf.com");
-    d->thread = 6;
-    fd = tcp_noblock_resolve(d);
+    //fd = tcp_noblock_resolve("python.org", 0, 0);
+    fd = tcp_noblock_resolve("baidu.com", 0, 0);
+    //fd = tcp_noblock_resolve("aaagoogleyyasdf.com", 0, 0);
 
     int i=0;
     for(;i<100; i++) {
 
-        d = (resov_data_t*)malloc(sizeof(*d));
-        memset(d, 0, sizeof(*d));
-        snprintf(d->host, sizeof(d->host) -1, "python%d.org", i);
-        d->thread = 32;
-        fd = tcp_noblock_resolve(d);
+        char host[512] = {0};
+        snprintf(host, sizeof(host) -1, "python%d.org", i);
+        //fd = tcp_noblock_resolve(host, 0, 8);
     }
 
-    fd = tcp_noblock_resolve_pollfd();
+    fd = tcp_noblock_resolve_fd();
     while (1) {
         fd_set rd;
         FD_ZERO(&rd);
@@ -119,14 +93,17 @@ int main(int argc, char **argv) {
         	if(!FD_ISSET(fd, &rd)) {
         		continue;
         	}
-        	resov_data_t* reso = tcp_noblock_resolve_result();
+        	char* host = NULL;
+        	char* addr = NULL;
+        	bool reso = tcp_noblock_resolve_result(&host, &addr, NULL);
         	if(!reso) continue;
 
-            if(reso->resov) {
-            	printf("resolve success: %s -> %s\n", reso->host, reso->addr);
+            if(reso) {
+            	printf("resolve success: %s -> %s\n", host, addr);
             }else{
-            	printf("resolve failed : %s\n", reso->host);
+            	printf("resolve failed : %s\n", host);
             }
+            free(host); free(addr);
         }else if(rv == 0) {
             printf("select timeout\n");
         }else{
