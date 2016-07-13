@@ -153,6 +153,18 @@ int proxy_init(simpleproxy_t* proxy)
 		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
 
+	int rfd = tcp_noblock_resolve_fd();
+	connection_t* con = &(proxy->conns[rfd]);
+	con->fd = rfd;
+	con->state = CONN_STATE_CONNECTED;
+	con->type = CONN_TYPE_CLIENT;
+
+	if(epoll_add_fd(proxy->threads[0].epfd, EPOLLIN, con) != 0) {
+		LOG_ERROR("epoll_add_fd failed.\n");
+		return -1;
+	}
+
+
 	if(proxy->plugin->init(proxy) != 0) {
 		LOG_ERROR("plugin init failed.\n");
 		return -1;

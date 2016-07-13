@@ -23,10 +23,10 @@
 
 
 #include "tson.h"
-#include "coro.h"
 #include "log.h"
 #include "misc.h"
 #include "sock.h"
+#include "sock-ext.h"
 
 #include "proxyutil.h"
 
@@ -127,7 +127,6 @@ struct proxy_session_s
 	connection_t* rsp_con;
 
 	int state;
-	coro_t* coro;
 };
 
 struct connection_s
@@ -191,8 +190,6 @@ struct simpleproxy_s
     bool sig_term;
     bool sig_usr1;
     bool sig_usr2;
-
-    coro_switcher_t switcher;
 };
 
 int parse_conf(simpleproxy_t* proxy);
