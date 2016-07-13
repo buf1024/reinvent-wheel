@@ -13,6 +13,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#define RESOLVE_CACHE_RESULT
+
 #ifndef RESOLVE_THREAD_COUNT
 static const int __THREAD_COUNT = 4;
 #else
@@ -25,6 +27,15 @@ static const int __SLEEP_TIME = 3;
 static const int __SLEEP_TIME = RESOLVE_SLEEP_TIME;
 #endif
 
+#ifdef RESOLVE_CACHE_RESULT
+#include "dict.h"
+#ifndef RESOLVE_CACHE_RESULT_TIMEOUT
+static int __CACHE_RESULT_TIMEOUT = 60*60*24;
+#else
+static int __CACHE_RESULT_TIMEOUT = RESOLVE_CACHE_RESULT_TIMEOUT;
+#endif
+#endif
+
 #define __ADDR_SIZE 64
 
 // pipe 的操作是原子性的
@@ -35,6 +46,10 @@ typedef struct resov_thread_info_s
 
     int count;
     pthread_t* thread;
+#ifdef RESOLVE_CACHE_RESULT
+    pthread_mutex_t lock;
+    dict* cache;
+#endif
 }resov_thread_info_t;
 
 typedef struct resov_data_s resov_data_t;
@@ -45,6 +60,9 @@ struct resov_data_s
     char* addr;
     bool resov;
     void* data;
+#ifdef RESOLVE_CACHE_RESULT
+    time_t resov_time;
+#endif
 };
 
 static int __put_resolve_data(int fd, resov_data_t* d)
@@ -100,8 +118,26 @@ static void* __resov_thread(void* d)
             } else {
             	state = false;
             }
-            printf("resov done: %s\n", reso->host);
-            reso->resov = state;
+			printf("resov done: %s\n", reso->host);
+			reso->resov = state;
+
+#ifdef RESOLVE_CACHE_RESULT
+			if(state) {
+				reso->resov_time = time(NULL);
+				int size = strlen(reso->host) + 1;
+				resov_data_t* v = dict_fetch_value(t->cache, reso->host, size);
+				if (!v) {
+					char* k = malloc(size);
+					memcpy(k, reso->host, size);
+
+					pthread_mutex_lock(&t->lock);
+					int r = dict_add(t->cache, k, size, reso, sizeof(*reso));
+					printf("dict add ret: %d\n", r);
+					pthread_mutex_unlock(&t->lock);
+				}
+			}
+#endif
+
             __put_resolve_data(t->fd_rst[1], reso);
         }else if(rv == 0) {
             //printf("thread %ld select timeout\n", pthread_self());
@@ -139,6 +175,10 @@ static resov_thread_info_t* __create_resov_thread(int thread)
 			printf("thread %d started, thread id = %ld\n", i, tid);
 			resov->thread[i] = tid;
 		}
+
+#ifdef RESOLVE_CACHE_RESULT
+		resov->cache = dict_create(NULL);
+#endif
 	}
 
     if (resov) {
@@ -163,6 +203,23 @@ int tcp_noblock_resolve(const char* host, void* data, int thread)
 	resov_thread_info_t* resov = __create_resov_thread(thread);
 	if(!resov) return -1;
 
+#ifdef RESOLVE_CACHE_RESULT
+	resov_data_t* v = dict_fetch_value(resov->cache, host, strlen(host) + 1);
+	if(v) {
+		time_t n = time(NULL);
+		if(__CACHE_RESULT_TIMEOUT < 0 || n - v->resov_time <= __CACHE_RESULT_TIMEOUT) {
+			printf("resov using cache.\n");
+		    __put_resolve_data(resov->fd_rst[1], v);
+		    return resov->fd_rst[0];
+		}else{
+			printf("resov timeout, remove cache");
+			free(v->host);free(v->addr);
+			dict_delete(resov->cache, host, strlen(host) + 1);
+		}
+	}
+
+#endif
+
     resov_data_t* d = (resov_data_t*)malloc(sizeof(*d));
     if(!d) return -1;
     memset(d, 0, sizeof(*d));
@@ -186,6 +243,7 @@ int tcp_noblock_resolve_fd()
 
 bool tcp_noblock_resolve_result(char** host, char** addr, void** data)
 {
+	if(host) *host = NULL;
 	if(addr) *addr = NULL;
 	if(data) *data = NULL;
 
@@ -198,11 +256,20 @@ bool tcp_noblock_resolve_result(char** host, char** addr, void** data)
 
 	bool state = reso->resov;
 
-	if(reso->resov) {
-		if(addr) *addr = reso->addr;
+	if(state) {
+		if(host) *host = strdup(reso->host);
+		if(addr) *addr = strdup(reso->addr);
+		if(data) *data = reso->data;
+#ifndef RESOLVE_CACHE_RESULT
+		free(reso->host);
+		free(reso->addr);
+	    free(reso);
+#endif
+
+	}else{
+		free(reso->host);
+		free(reso);
 	}
-	if(data) *data = reso->data;
-	if(host) *host = reso->host;
-	free(reso);
+
 	return state;
 }

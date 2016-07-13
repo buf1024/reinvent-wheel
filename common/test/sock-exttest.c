@@ -104,6 +104,24 @@ int main(int argc, char **argv) {
             	printf("resolve failed : %s\n", host);
             }
             free(host); free(addr);
+            static int i = 0;
+            if(i== 0) {
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("baidu.com", 0, 0);
+            	tcp_noblock_resolve("126.com", 0, 0);
+            	i++;
+            }
         }else if(rv == 0) {
             printf("select timeout\n");
         }else{
