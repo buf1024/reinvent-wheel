@@ -50,15 +50,7 @@ int proxy_main_loop(simpleproxy_t* proxy)
 		}
 
 
-		if (sa.ss_family == AF_INET) {
-			struct sockaddr_in *s = (struct sockaddr_in *) &sa;
-			inet_ntop(AF_INET, (void*) &(s->sin_addr), client_ip, sizeof(client_ip));
-			client_port = ntohs(s->sin_port);
-		} else {
-			struct sockaddr_in6 *s = (struct sockaddr_in6 *) &sa;
-			inet_ntop(AF_INET6, (void*) &(s->sin6_addr), client_ip, sizeof(client_ip));
-			client_port = ntohs(s->sin6_port);
-		}
+		tcp_sock_name(fd, client_ip, sizeof(client_ip), &client_port);
 
 		LOG_INFO("accept client: ip=%s, port=%d\n", client_ip, client_port);
 
