@@ -1,21 +1,21 @@
 CC = cc
-CCFLAGS = -I./thinhttpd -O0 -Wall -ggdb -fPIC -fpic
+CCFLAGS = -I../common -std=gnu99 -O0 -Wall -Wextra -g -ggdb -fPIC -fpic
 
-THINHTTPD = thind
+EXE = simplehttp
 
-THIN_OBJS = thinhttpd/main.o
+OBJS=$(patsubst %.c,%.o,$(wildcard *.c))
 
 
-EXT_CCFLAGS = -lpthread
+EXT_CCFLAGS = -rdynamic -lpthread -ldl -L../common -lmylib
 
-all:$(THINHTTPD)
+all:$(EXE)
 
-$(THINHTTPD):$(THIN_OBJS)
-	$(CC) $(EXT_CCFLAGS) -o $@ $^
+$(EXE):$(OBJS)
+	$(CC) -o $@ $^ $(EXT_CCFLAGS)
 
 clean:
-	rm -rf $(THIN_OBJS) 
-	rm -rf $(THINHTTPD)
+	rm -rf $(OBJS) 
+	rm -rf $(EXE)
 
 .PRECIOUS:%.c
 .SUFFIXES:

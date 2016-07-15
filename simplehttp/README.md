@@ -1,4 +1,2 @@
-# thinhttpd
-
-1. thin http webserver
-
+# simplehttp
+the very simple http webserver

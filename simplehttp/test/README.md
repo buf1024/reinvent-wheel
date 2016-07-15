@@ -1,2 +1,0 @@
-# thinhttpd
-thin http webserver

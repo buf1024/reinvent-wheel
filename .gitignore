@@ -1,10 +1,11 @@
 *~
 thind
 simpleproxy
+simplehttp
 libmylib
 lazyproxyd
 
-core
+core*
 
 *_test
 *.tmp
