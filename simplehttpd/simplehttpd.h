@@ -1,12 +1,12 @@
 /*
- * thinhttpd.h
+ * simplehttpd.h
  *
  *  Created on: 2016/5/13
  *      Author: Luo Guochun
  */
 
-#ifndef THINHTTPD_THINHTTPD_C_
-#define THINHTTPD_THINHTTPD_C_
+#ifndef __SIMPLEHTTPD_H__
+#define __SIMPLEHTTPD_H__
 
 #define _GNU_SOURCE
 
@@ -39,4 +39,4 @@ struct httpd_s
 
 
 
-#endif /* THINHTTPD_THINHTTPD_C_ */
+#endif /* __SIMPLEHTTPD_H__ */

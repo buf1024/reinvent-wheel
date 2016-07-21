@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
+
 typedef struct tson_s     tson_t;
 typedef struct tson_arr_s tson_arr_t;
 
@@ -32,8 +34,13 @@ int tson_dump(tson_t* tson, char* buf, int size);
 
 int tson_get(tson_t* tson, const char* key, char** value, tson_t** sub_tson);
 int tson_set(tson_t* tson, const char* key, const char* value, tson_t* sub_tson);
-
 int tson_get_arr(tson_t* tson, const char* key, tson_arr_t** arr);
+
+int tson_get_bool(tson_t* tson, const char* key, bool* value);
+int tson_get_double(tson_t* tson, const char* key, double* value);
+int tson_get_int(tson_t* tson, const char* key, int* value);
+int tson_get_long(tson_t* tson, const char* key, long* value);
+int tson_get_string(tson_t* tson, const char* key, char** value);
 
 
 #ifdef __cplusplus

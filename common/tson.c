@@ -445,3 +445,73 @@ int tson_set(tson_t* tson, const char* key, const char* value, tson_t* sub_tson)
 
     return 0;
 }
+
+int tson_get_bool(tson_t* tson, const char* key, bool* value)
+{
+	*value = false;
+
+	char* tv = NULL;
+	tson_t* st = NULL;
+	int rv = tson_get(tson, key, &tv, &st);
+	if(rv == 0) return 0;
+
+	if(strcasecmp(tv, "yes") == 0 ||
+			strcasecmp(tv, "on") == 0 ||
+			strcasecmp(tv, "true") == 0 ||
+			strcasecmp(tv, "1") == 0) {
+		*value = true;
+	}
+	return rv;
+}
+int tson_get_double(tson_t* tson, const char* key, double* value)
+{
+	*value = 0;
+
+	char* tv = NULL;
+	tson_t* st = NULL;
+	int rv = tson_get(tson, key, &tv, &st);
+	if(rv == 0) return 0;
+
+	*value = atof(tv);
+
+	return rv;
+}
+int tson_get_int(tson_t* tson, const char* key, int* value)
+{
+	*value = 0;
+
+	char* tv = NULL;
+	tson_t* st = NULL;
+	int rv = tson_get(tson, key, &tv, &st);
+	if(rv == 0) return 0;
+
+	*value = atoi(tv);
+
+	return rv;
+}
+int tson_get_long(tson_t* tson, const char* key, long* value)
+{
+	*value = 0;
+
+	char* tv = NULL;
+	tson_t* st = NULL;
+	int rv = tson_get(tson, key, &tv, &st);
+	if(rv == 0) return 0;
+
+	*value = atol(tv);
+
+	return rv;
+}
+int tson_get_string(tson_t* tson, const char* key, char** value)
+{
+	*value = 0;
+
+	char* tv = NULL;
+	tson_t* st = NULL;
+	int rv = tson_get(tson, key, &tv, &st);
+	if(rv == 0) return 0;
+
+	*value = strdup(tv);
+
+	return rv;
+}

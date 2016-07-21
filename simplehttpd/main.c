@@ -11,7 +11,7 @@
 #include <getopt.h>
 #include <stdbool.h>
 
-#include "simplehttp.h"
+#include "simplehttpd.h"
 
 static void usage()
 {
