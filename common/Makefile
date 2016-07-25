@@ -1,5 +1,5 @@
 CC = cc
-CCFLAGS = -Wall -Wextra -g -ggdb -DHAVE_EPOLL
+CCFLAGS = -std=gnu99 -O0 -Wall -Wextra -Werror -g -ggdb -fPIC -fpic -DHAVE_EPOLL
 
 AR = ar
 ARFLAGS = -r -o
