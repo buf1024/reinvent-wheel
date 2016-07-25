@@ -19,6 +19,7 @@ int parse_conf(simpleproxy_t* proxy)
 	char* v = NULL;
 
 	TSON_READ_STR_MUST(t, "log-path", v, s);
+	tson_get_string(t, "log-path", &proxy->log_path);
 	proxy->log_path = strdup(v);
 	TSON_READ_STR_MUST(t, "log-level", v, s);
 	proxy->log_level = log_get_level(v);
@@ -65,40 +66,6 @@ int parse_conf(simpleproxy_t* proxy)
 		return -1;
 	}
 
-#if 0
-	if(strcmp(v, "find-connect-new") == 0) {
-		proxy->mode = WORK_MODE_CONNECT_NEW;
-	}else if(strcmp(v, "find-connect-packet")) {
-		proxy->mode = WORK_MODE_CONNECT_PACKET;
-	}else {
-		printf("work mode not correct.\n");
-		return -1;
-	}
-	if(s == NULL) {
-		printf("sub tson is null, configure syntax not right.\n");
-		return -1;
-	}
-
-
-	tson_arr_t* arr = NULL;
-	proxy->backend_cnt = tson_get_arr(s, "backend", &arr);
-	if(proxy->backend_cnt <= 0) {
-		printf("backend == 0\n");
-		return -1;
-	}
-	proxy->backends = (proxy_backend_t*)malloc(sizeof(proxy_backend_t) * proxy->backend_cnt);
-	int i=0;
-	for(;i<proxy->backend_cnt; i++) {
-		if(__parse_backend(arr[i].value, &proxy->backends[i]) < 0) {
-			printf("parse backend failed.\n");
-			return -1;
-		}
-	}
-
-	tson_t* ss = NULL;
-	TSON_READ_STR_MUST(s, "proxy-algorithm", proxy->algo, ss);
-	TSON_READ_STR_OPT(s, "proxy-plugin", proxy->plugin_name, ss);
-#endif
 	tson_free(t);
 
 

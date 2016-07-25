@@ -10,16 +10,16 @@
 
 #define _GNU_SOURCE
 
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
+#include <stdbool.h>
+
 typedef struct http_request_s http_request_t;
 typedef struct http_response_s http_response_t;
 typedef struct httpd_s httpd_t;
-
-
-enum {
-	THIN_HTTPD_RUN_TEST,
-	THIN_HTTPD_RUN_NORMAL,
-	THIN_HTTPD_RUN_EXIT,
-};
 
 struct http_request_s
 {

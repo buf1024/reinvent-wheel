@@ -1,9 +1,10 @@
 CC = cc
-CCFLAGS = -I../common -std=gnu99 -O0 -Wall -Wextra -g -ggdb -fPIC -fpic
+CCFLAGS = -I../common -std=gnu99 -O0 -Wall -Wextra -Werror -g -ggdb -fPIC -fpic
 
 EXE = simplehttp
 
-OBJS=$(patsubst %.c,%.o,$(wildcard *.c))
+OBJS=$(patsubst %.c,%.o,$(wildcard *.c)) \
+      $(patsubst %.c,%.o,$(wildcard mod/*.c))
 
 
 EXT_CCFLAGS = -rdynamic -lpthread -ldl -L../common -lmylib
