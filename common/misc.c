@@ -5,7 +5,6 @@
  *      Author: Luo Guochun
  */
 
-
 #include "misc.h"
 #include <sys/types.h>
 #include <sys/resource.h>
@@ -249,7 +248,6 @@ size_t get_max_open_file_count(void)
 
     return (size_t)r.rlim_cur;
 }
-
 
 
 /*

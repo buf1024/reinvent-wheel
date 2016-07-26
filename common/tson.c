@@ -109,6 +109,7 @@ static tson_node_t* __parse_line(const char* l)
     }
 
     if(*kv == 0) {
+        printf("parse error, line = %s\n", l);
         free(n->k);
         free(n);
         if(tson) {
@@ -176,7 +177,8 @@ static tson_t* __parse_tson(tson_t* tson, const char* tstr)
                         if(*start == '\n' || *start != ' ') break;
                     }
                     if(*start != '\n' && *(start+1) != 0) {
-                        tson_free(n->t);
+                        printf("parse error, line = %s\n", l);
+                    	tson_free(n->t);
                         n->t = NULL;
                         return NULL;
                     }

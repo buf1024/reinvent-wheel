@@ -1,5 +1,5 @@
 CC = cc
-CCFLAGS = -I../common -std=gnu99 -O0 -Wall -Wextra -Werror -g -ggdb -fPIC -fpic
+CCFLAGS = -I../common -I./ -I./mod -std=gnu99 -O0 -Wall -Wextra -Werror -g -ggdb -fPIC -fpic
 
 EXE = simplehttp
 

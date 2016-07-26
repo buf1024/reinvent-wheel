@@ -8,10 +8,11 @@ SOCKEXT_TEST=sockext_test
 EVT_TEST=evt_test
 TSON_TEST=tson_test
 TRIE_TEST=trie_test
+QUEUEEXT_TEST=queue-ext_test
 
 MYEXE=$(LOG_TEST) $(CORO_TEST) $(SOCK_TEST) \
 	  $(SOCKEXT_TEST) $(EVT_TEST) $(TSON_TEST) \
-	  $(TRIE_TEST)
+	  $(TRIE_TEST) $(QUEUEEXT_TEST) 
 
 MY_LOG_OBJ=logtest.o
 MY_CORO_OBJ=corotest.o
@@ -20,6 +21,7 @@ MY_SOCKEXT_OBJ=sock-exttest.o
 MY_EVT_OBJ=evttest.o
 MY_TSON_OBJ=tsontest.o
 MY_TRIE_OBJ=trietest.o
+MY_QUEUE-EXT_OBJ=queue-exttest.o
 
 
 
@@ -46,6 +48,9 @@ $(TSON_TEST):$(MY_TSON_OBJ)
 	$(CC) -o $@ $^ $(EXT_CCFLAGS) 
 	
 $(TRIE_TEST):$(MY_TRIE_OBJ)
+	$(CC) -o $@ $^ $(EXT_CCFLAGS) 
+	
+$(QUEUEEXT_TEST):$(MY_QUEUE-EXT_OBJ)
 	$(CC) -o $@ $^ $(EXT_CCFLAGS) 
 
 clean:
