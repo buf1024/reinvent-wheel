@@ -279,20 +279,6 @@ static int httpd_init(httpd_t* http)
 		return -1;
 	}
 
-	mod_map_t* mod = NULL;
-	LIST_FOREACH(mod, &http->mods, entry) {
-		http_module_t* m = mod->data;
-		if(m->init) {
-			LOG_INFO("init mod %s\n", m->name);
-			if(m->init(http) != 0) {
-				LOG_ERROR("init mod %s failed.\n", m->name);
-				return -1;
-			}
-		}
-	}
-
-
-
 	LOG_INFO("logger is ready.\n");
 
 
@@ -419,10 +405,10 @@ static int httpd_init(httpd_t* http)
 		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
 
-/*
+
 	mod_map_t* mod = NULL;
 	LIST_FOREACH(mod, &http->mods, entry) {
-		http_module_t* m = mod->data->mod;
+		http_module_t* m = mod->data;
 		if(m->init) {
 			LOG_INFO("init mod %s\n", m->name);
 			if(m->init(http) != 0) {
@@ -431,7 +417,7 @@ static int httpd_init(httpd_t* http)
 			}
 		}
 	}
-*/
+
 
 	pthread_barrier_wait(&barrier);
 

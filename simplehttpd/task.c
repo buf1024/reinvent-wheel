@@ -58,7 +58,10 @@ int httpd_main_loop(httpd_t* http)
 
 		int rv = epoll_wait(http->epfd, http->evts, http->nfd, EPOLL_TIMEOUT);
 		if(rv == 0) {
-			LOG_DEBUG("epoll_wait main loop timer.\n");
+			if(main_timer_task(http) != 0) {
+				LOG_ERROR("main_timer_task failed.\n");
+			}
+			continue;
 		}else if(rv < 0) {
 			if (http->sig_term) {
 				LOG_INFO("catch quit signal.\n");
@@ -177,6 +180,14 @@ void* http_task_thread(void* data)
 int thread_timer_task(http_thread_t* t)
 {
 	LOG_DEBUG("thread timer task call.tid=%ld\n", t->tid);
+
+	return 0;
+}
+
+
+int main_timer_task(httpd_t* http)
+{
+	LOG_DEBUG("main timer task call.tnum: %d\n", http->thread_num);
 
 	return 0;
 }
