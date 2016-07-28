@@ -8,15 +8,15 @@
 #define _GNU_SOURCE
 #include <getopt.h>
 #include <signal.h>
-#include <dlfcn.h>
-
+#include <sys/socket.h>
+#include <netinet/tcp.h>
 #include "httpd.h"
 #include "tson.h"
 #include "log.h"
 #include "misc.h"
 #include "task.h"
 #include "sock.h"
-#include "http_util.h"
+#include "httputil.h"
 
 static httpd_t* _httpd = NULL;
 
@@ -43,13 +43,6 @@ static void sign_handler(int signo)
 }
 
 
-static void *find_symbol(const char *name)
-{
-    void *symbol = dlsym(RTLD_NEXT, name);
-    if (!symbol)
-        symbol = dlsym(RTLD_DEFAULT, name);
-    return symbol;
-}
 
 static int parse_listen_conf(httpd_t* http, char* virhost, char* listen, tson_t* t)
 {
@@ -113,11 +106,11 @@ static int parse_listen_conf(httpd_t* http, char* virhost, char* listen, tson_t*
 		printf("missing path conf.\n");
 		return -1;
 	}
-	if(!http->url) {
-		http->url = trie_new(NULL);
+	if(!http->urls) {
+		http->urls = trie_new(NULL);
 	}
 
-	if(!http->url) {
+	if(!http->urls) {
 		printf("create trie failed.\n");
 		return -1;
 	}
@@ -165,8 +158,13 @@ static int parse_listen_conf(httpd_t* http, char* virhost, char* listen, tson_t*
 		path->mod = mod;
 
 		// todo
-
-		trie_add(http->url, path->url, path->mod);
+		if(trie_add(http->urls, path->url, path->mod) != 0) {
+			printf("trie add failed.\n");
+			return -1;
+		}
+		mod_map_t* m = (mod_map_t*)calloc(1, sizeof(*m));
+		m->data = mod;
+		LIST_INSERT_HEAD(&http->mods, m, entry);
 	}
 
 	return 0;
@@ -242,6 +240,11 @@ static int parse_conf(httpd_t* http)
 		printf("listener is empty.\n");
 		return -1;
 	}
+	if(LIST_EMPTY(&http->mods)) {
+		printf("mod is empty.\n");
+		return -1;
+	}
+
 
 	tson_free(t);
 
@@ -265,19 +268,54 @@ static int test_conf(const char* conf)
 
 static int httpd_init(httpd_t* http)
 {
+	if(http->daemon) {
+		daemonlize();
+	}
+
 
 	if(log_init(http->log_level, http->log_level, http->log_path,
 			"simplehttpd", http->log_buf_size, 0, -1) != 0) {
 		printf("log_init failed.\n");
 		return -1;
 	}
+
+	mod_map_t* mod = NULL;
+	LIST_FOREACH(mod, &http->mods, entry) {
+		http_module_t* m = mod->data;
+		if(m->init) {
+			LOG_INFO("init mod %s\n", m->name);
+			if(m->init(http) != 0) {
+				LOG_ERROR("init mod %s failed.\n", m->name);
+				return -1;
+			}
+		}
+	}
+
+
+
 	LOG_INFO("logger is ready.\n");
+
+
+
+	http->maxfd = get_max_open_file_count();
+	if(http->maxfd <= 0) {
+		LOG_FATAL("get_max_open_file_count failed.\n");
+		return -1;
+	}
+	LOG_INFO("max open file: %u\n", http->maxfd);
+	http->conns = calloc(http->maxfd, sizeof(connection_t));
+	if(!http->conns) {
+		LOG_FATAL("alloc connection failed.\n");
+		return -1;
+	}
 
 	http->epfd = epoll_create1(EPOLL_CLOEXEC);
 	if(http->epfd <= 0) {
 		LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
 		return -1;
 	}
+
+
 
 	listener_t* var = NULL;
 	LIST_FOREACH(var, &http->listener, entry) {
@@ -290,27 +328,51 @@ static int httpd_init(httpd_t* http)
 			return -1;
 		}
 		LOG_INFO("listening ip=%s, port=%d\n", d->listen, d->port);
+
+		tcp_reuse_addr(fd, true);
+		tcp_noblock(fd, true);
+
+		struct linger linger = {1, 1};
+		setsockopt(fd, SOL_SOCKET, SO_LINGER, (void*)&linger, (socklen_t)sizeof(struct linger));
+		int fastopen_opt = 5;
+		setsockopt(fd, SOL_TCP, TCP_FASTOPEN, (void*)&fastopen_opt, (socklen_t)sizeof(int));
+		int quick_ack = 0;
+		setsockopt(fd, SOL_TCP, TCP_QUICKACK, (void*)&quick_ack, (socklen_t)sizeof(int));
+
+		connection_t* con = &http->conns[fd];
+		con->type = CONN_TYPE_SERVER;
+		con->fd = fd;
+		if(epoll_add_fd(http->epfd, EPOLLIN, con) != 0) {
+			LOG_FATAL("epoll add failed.\n");
+			return -1;
+		}
+
+		http->nfd++;
 	}
 
 
-#if 0
-	http->nfd = get_max_open_file_count();
-	if(http->nfd <= 0) {
-		LOG_FATAL("get_max_open_file_count failed.\n");
+
+
+	http->evts = (struct epoll_event*)calloc(1, sizeof(*http->evts));
+	if(!http->evts) {
+		LOG_FATAL("malloc struct epoll_events failed.\n");
 		return -1;
 	}
-	LOG_INFO("max open file: %u\n", http->nfd);
-	http->conns = calloc(http->nfd, sizeof(connection_t));
-	if(!http->conns) {
-		LOG_FATAL("alloc connection failed.\n");
-		return -1;
-	}
+
 
 	http->threads = calloc(http->thread_num, sizeof(http_thread_t));
 	if(!http->threads) {
 		LOG_FATAL("alloc thread failed.\n");
 		return -1;
 	}
+
+	pthread_barrier_t barrier;
+	if(pthread_barrier_init(&barrier, NULL, (unsigned int)http->thread_num + 1) != 0) {
+		LOG_ERROR("pthread_barrier_init failed.\n");
+		return -1;
+	}
+
+
 
 	for(int i=0; i<http->thread_num; i++) {
 		http_thread_t* t = &http->threads[i];
@@ -322,50 +384,67 @@ static int httpd_init(httpd_t* http)
 			LOG_FATAL("alloc thread info failed.\n");
 			return -1;
 		}
-		t->state = THREAD_STATE_DEAD;
-
 		t->epfd = epoll_create1(EPOLL_CLOEXEC);
 		if(t->epfd <= 0) {
 			LOG_ERROR("epoll_create1 failed, errno=%d\n", errno);
 			return -1;
 		}
 
-		if(pipe(t->fd) != 0) {
+		if(pipe2(t->fd, O_NONBLOCK | O_CLOEXEC) != 0) {
 			LOG_ERROR("thread create pipe failed.\n");
 			return -1;
 		}
 
 		connection_t* con = &(http->conns[t->fd[0]]);
 		con->fd = t->fd[0];
-		con->state = CONN_STATE_CONNECTED;
-		con->type = CONN_TYPE_CLIENT;
+		con->type = CONN_TYPE_PIPE;
 
 		if(epoll_add_fd(t->epfd, EPOLLIN, con) != 0) {
 			LOG_ERROR("epoll_add_fd failed.\n");
 			return -1;
 		}
+		t->barrier = &barrier;
 
-		pthread_create(&t->tid, NULL, proxy_task_routine, t);
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+	    if(pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM) != 0){
+	    	LOG_ERROR("pthread_attr_setscope failed.\n");
+	    }
+
+	    if(pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE) != 0) {
+	    	LOG_ERROR("pthread_attr_setdetachstate failed.\n");
+	    }
+
+		pthread_create(&t->tid, &attr, http_task_thread, t);
 		LOG_INFO("create thread suc! tid = %ld\n", t->tid);
 	}
 
-	int rfd = tcp_noblock_resolve_fd();
-	connection_t* con = &(http->conns[rfd]);
-	con->fd = rfd;
-	con->state = CONN_STATE_CONNECTED;
-	con->type = CONN_TYPE_CLIENT;
+/*
+	mod_map_t* mod = NULL;
+	LIST_FOREACH(mod, &http->mods, entry) {
+		http_module_t* m = mod->data->mod;
+		if(m->init) {
+			LOG_INFO("init mod %s\n", m->name);
+			if(m->init(http) != 0) {
+				LOG_ERROR("init mod %s failed.\n", m->name);
+				return -1;
+			}
+		}
+	}
+*/
 
-	if(epoll_add_fd(http->threads[0].epfd, EPOLLIN, con) != 0) {
-		LOG_ERROR("epoll_add_fd failed.\n");
-		return -1;
+	pthread_barrier_wait(&barrier);
+
+	pthread_barrier_destroy(&barrier);
+
+
+	if(http->user) {
+		if(runas(http->user) != 0) {
+			LOG_FATAL("can't not run as %s\n", http->user);
+			return -1;
+		}
 	}
 
-
-	if(http->plugin->init(http) != 0) {
-		LOG_ERROR("plugin init failed.\n");
-		return -1;
-	}
-#endif
 	return 0;
 
 }

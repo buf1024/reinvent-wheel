@@ -53,7 +53,7 @@ typedef struct dict_entry {
     void *key;
     void *val;
     struct dict_entry *next;
-} dict_entry;
+} dict_entry, dict_entry_t;
 
 
 /* This is our hash table structure. Every dictionary has two of this as we
@@ -63,14 +63,14 @@ typedef struct dictht {
     unsigned long size;
     unsigned long sizemask;
     unsigned long used;
-} dictht;
+} dictht, dictht_t;
 
 typedef struct dict {
     void *privdata;
     dictht ht[2];
     int rehashidx;              /* rehashing not in progress if rehashidx == -1 */
     int iterators;              /* number of iterators currently running */
-} dict;
+} dict, dict_t;
 
 /* If safe is set to 1 this is a safe iteartor, that means, you can call
  * dictAdd, dictFind, and other functions against the dictionary even while
@@ -80,7 +80,7 @@ typedef struct dict_iterator {
     dict *d;
     int table, index, safe;
     dict_entry *entry, *next_entry;
-} dict_iterator;
+} dict_iterator, dict_iterator_t;
 
 /* This is the initial size of every hash table */
 #define DICT_HT_INITIAL_SIZE     4

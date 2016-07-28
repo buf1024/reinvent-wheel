@@ -13,7 +13,7 @@ static int mod_test_loadconf(httpd_t* http UNUSED, tson_t* t UNUSED)
 	return 0;
 }
 
-static int mod_test_init(httpd_t* http UNUSED, tson_t* t UNUSED)
+static int mod_test_init(httpd_t* http UNUSED)
 {
 
 	return 0;

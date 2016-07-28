@@ -58,7 +58,7 @@ enum LogLevel
 
 
 int  log_init(int con_lvl, int file_lvl,
-        char* file_path, char* prefix, int buf_size,
+        const char* file_path, const char* prefix, int buf_size,
         int sw_time, int sw_size);
 int  log_finish();
 

@@ -17,11 +17,13 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "cmmhdr.h"
 #include "queue-ext.h"
 #include "trie.h"
 #include "tson.h"
+#include "log.h"
 
 typedef struct http_request_s http_request_t;
 typedef struct http_response_s http_response_t;
@@ -29,6 +31,7 @@ typedef struct http_thread_s http_thread_t;
 typedef struct http_module_s http_module_t;
 typedef struct http_path_s http_path_t;
 typedef struct connection_s connection_t;
+typedef struct http_msg_s http_msg_t;
 typedef struct httpd_s httpd_t;
 
 
@@ -87,7 +90,7 @@ struct http_module_s
 	char* name;
 	int (*load_conf)(httpd_t* http, tson_t* tson);
 
-	int (*init)(httpd_t* http, tson_t* tson);
+	int (*init)(httpd_t* http);
 	int (*uninit)(httpd_t* http);
 
 	int (*handle)(httpd_t* http, http_request_t* req, http_response_t* rsp);
@@ -96,6 +99,7 @@ struct http_module_s
 
 struct http_thread_s
 {
+	httpd_t* http;
 	pthread_barrier_t* barrier;
 
 	int fd[2];
@@ -126,7 +130,9 @@ struct http_path_s
 
 struct connection_s
 {
-
+	int fd;
+	int type;
+	int state;
 };
 
 struct listener
@@ -144,7 +150,18 @@ struct listener
 	char* listen;
 	int   port;
 };
+
+struct http_msg_s
+{
+	unsigned cmd;
+
+	union {
+		int fd;
+	} data;
+};
+
 DEF_LIST(list_listener_t, struct listener*, listener_t, entry);
+DEF_LIST(list_mod_t, http_module_t*, mod_map_t, entry);
 
 struct httpd_s
 {
@@ -160,15 +177,18 @@ struct httpd_s
 	list_listener_t listener;
 
 	int   thread_num;
-	int   idle_to;
-
 
 	int epfd;
-	size_t nfd;
+
+	size_t maxfd;
     connection_t* conns;
     http_thread_t* threads;
 
-    trie_t* url;
+    int nfd;
+    struct epoll_event* evts;
+
+    trie_t* urls;
+    list_mod_t mods;
 
     bool sig_term;
     bool sig_usr1;

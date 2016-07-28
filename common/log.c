@@ -64,7 +64,7 @@ struct console_log
 
 
 static int log_init_file(int file_lvl,
-        char* file_path, char* prefix, int buf_size,
+        const char* file_path, const char* prefix, int buf_size,
         int sw_time, int sw_size);
 static int log_file_flush();
 static int log_file_uninit();
@@ -245,7 +245,7 @@ int log_finish()
     return LOG_SUCCESS;
 }
 int log_init(int con_lvl, int file_lvl,
-        char* file_path, char* prefix, int buf_size,
+        const char* file_path, const char* prefix, int buf_size,
         int sw_time, int sw_size)
 {
     log_clearup();
@@ -269,7 +269,7 @@ int log_console_msg(const char* log, int len __attribute__((unused)))
 
 
 int log_init_file(int file_lvl,
-        char* file_path, char* prefix, int buf_size,
+        const char* file_path, const char* prefix, int buf_size,
         int sw_time, int sw_size)
 {
     if(!file_path || !prefix || buf_size <= 0) {
