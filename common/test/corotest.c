@@ -34,16 +34,16 @@ int main(int argc, char **argv)
 	char* buf = malloc(100);
 
 	do {
-		if(coro_get_state(co1) != CORO_FINISH) {
+		if(coro_state(co1) != CORO_FINISH) {
 		    coro_resume(co1);
 		}
-		if(coro_get_state(co2) != CORO_FINISH) {
+		if(coro_state(co2) != CORO_FINISH) {
 		    coro_resume(co2);
 		}
 
 		printf("main sleep 1 seconds\n");
 		sleep(1);
-	}while(coro_get_state(co1) != CORO_FINISH && coro_get_state(co2) != CORO_FINISH);
+	}while(coro_state(co1) != CORO_FINISH && coro_state(co2) != CORO_FINISH);
 	free(buf);
 	coro_free(co1);
 	coro_free(co2);

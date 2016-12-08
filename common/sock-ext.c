@@ -256,10 +256,11 @@ bool tcp_noblock_resolve_result(char** host, char** addr, void** data)
 
 	bool state = reso->resov;
 
+	if(data) *data = reso->data;
+
 	if(state) {
 		if(host) *host = strdup(reso->host);
 		if(addr) *addr = strdup(reso->addr);
-		if(data) *data = reso->data;
 #ifndef RESOLVE_CACHE_RESULT
 		free(reso->host);
 		free(reso->addr);

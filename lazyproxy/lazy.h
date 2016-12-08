@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <ctype.h>
+#include <pthread.h>
 #include "cmmhdr.h"
 #include "log.h"
 #include "coro.h"
@@ -24,6 +25,7 @@
 #include "sock.h"
 #include "dict.h"
 #include "coro.h"
+#include "sock-ext.h"
 
 #define OOM_CHECK(ptr, msg) \
 	do { \
@@ -53,7 +55,7 @@ enum {
 	MAX_PATH_SIZE       = 256,
 	MAX_REQ_SIZE        = 4*1024,
 	MAX_REQ_GROW_SIZE   = 512,
-	MAX_CORO_STACK_SIZE = 160*1024,
+	MAX_CORO_STACK_SIZE = 1024*1024,
 };
 
 enum {
@@ -115,7 +117,6 @@ struct lazy_proxy_s
 	struct epoll_event* events;
 
 	connection_t* dns_rsv_con;
-	coro_switcher_t switcher;
 };
 
 struct connection_s
@@ -126,7 +127,6 @@ struct connection_s
 	int type;
 	int state;
 
-	coro_t* coro;
 	http_proxy_t* pxy;
 };
 
@@ -138,14 +138,18 @@ struct buffer_s
 
 struct http_proxy_s
 {
+	coro_t* coro;
+
     connection_t* req_con;
+    connection_t* rsp_con;
 
     buffer_t* req_r;
     buffer_t* req_w;
+
     int   req_type;
     dict* req_head;
 
-    connection_t* rsp_con;
+    char dst_host[MAX_ADDR_SIZE];
 };
 
 
@@ -169,6 +173,7 @@ int lazy_http_rsp_write(coro_t* coro, buffer_t* buf);
 int lazy_http_rsp_read(coro_t* coro, buffer_t* buf);
 int lazy_http_req_write(coro_t* coro, buffer_t* buf);
 
+int free_http_proxy(http_proxy_t* pxy);
 int resume_http_req_coro(coro_t* coro);
 int parse_http_req(http_proxy_t* pxy, const char* req, int size);
 int parse_req_head(http_proxy_t* pxy, const char* head, int size);

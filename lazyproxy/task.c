@@ -10,7 +10,7 @@
 int lazy_proxy_task(lazy_proxy_t* lazy)
 {
 	while (true) {
-		int rv = epoll_wait(lazy->epfd, lazy->events, lazy->conn_size, 1000);
+		int rv = epoll_wait(lazy->epfd, lazy->events, lazy->conn_size, lazy->timout);
 		if(rv == 0) {
 			lazy_timer_task(lazy);
 		}else if(rv < 0) {
@@ -29,12 +29,11 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 			LOG_ERROR("epoll_wait error, errno=%d\n", errno);
 			break;
 		}else{
-			int i=0;
-			for(;i<rv; i++) {
+			for(int i=0; i<rv; i++) {
 				struct epoll_event* ev = &(lazy->events[i]);
 				connection_t* con = (connection_t*)ev->data.ptr;
 
-				LOG_DEBUG("epoll fd = %d, st = %d\n", con->fd, con->state);
+				LOG_DEBUG("epoll fd = %d, state = %d\n", con->fd, con->state);
 				if(con->state == CONN_STATE_LISTENING) {
 					char addr[MAX_ADDR_SIZE] = {0};
 					int port = 0;
@@ -74,25 +73,34 @@ int lazy_proxy_task(lazy_proxy_t* lazy)
 						close(fd);
 					}
 					lazy_spawn_http_req_coro(con);
-					resume_http_req_coro(con->coro);
+					resume_http_req_coro(con->pxy->coro);
 				}
 
 				if(con->state == CONN_STATE_CONNECTED) {
 
-					resume_http_req_coro(con->coro);
+					resume_http_req_coro(con->pxy->coro);
 				}
 				if(con->state == CONN_STATE_CONNECTING) {
 					LOG_DEBUG("connected fd = %d.\n", con->fd);
 				    con->state = CONN_STATE_CONNECTED;
-				    resume_http_req_coro(con->coro);
+				    resume_http_req_coro(con->pxy->coro);
 				}
 				if(con->state == CONN_STATE_RESOLVING) {
-					resov_data_t* d = tcp_noblock_resolve_result();
-					if(d) {
-						LOG_DEBUG("resove %s %s\n", d->host, d->addr);
-						http_proxy_t* p = (http_proxy_t*)d->data;
-						resume_http_req_coro(p->req_con->coro);
+					char* addr = NULL;
+					http_proxy_t* p = NULL;
+					bool resov = tcp_noblock_resolve_result(NULL, &addr, (void**)&p);
+					if(resov) {
+				        LOG_DEBUG("resove host \n");
 					}
+					if(p->req_con) {
+						strcpy(p->dst_host, addr);
+					    resume_http_req_coro(p->req_con->pxy->coro);
+					}
+					free(addr);
+				}
+				if(con->state == CONN_STATE_WAIT) {
+					LOG_DEBUG("unexpected event, free resouce\n");
+					free_http_proxy(con->pxy);
 				}
 			}
 		}

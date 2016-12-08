@@ -30,6 +30,7 @@ typedef struct http_response_s http_response_t;
 typedef struct http_thread_s http_thread_t;
 typedef struct http_module_s http_module_t;
 typedef struct http_path_s http_path_t;
+typedef struct buffer_s buffer_t;
 typedef struct connection_s connection_t;
 typedef struct http_msg_s http_msg_t;
 typedef struct httpd_s httpd_t;
@@ -82,7 +83,7 @@ enum {
 	LISTEN_BACK_LOG      = 128,
 	EPOLL_TIMEOUT        = 1000,
 	DEFAULT_IDEL_TIMEOUT = 3600,
-	DEFAULT_BUF_SIZE     = 4096,
+	DEFAULT_BUF_SIZE     = 1024,
 };
 
 struct http_module_s
@@ -114,12 +115,12 @@ struct http_thread_s
 
 struct http_request_s
 {
-
+	connection_t* con;
 };
 
 struct http_response_s
 {
-
+	connection_t* con;
 };
 
 struct http_path_s
@@ -128,11 +129,24 @@ struct http_path_s
 	http_module_t* mod;
 };
 
+struct buffer_s
+{
+	int cap;
+	int size;
+	char* cache;
+
+	buffer_t* next;
+};
+
 struct connection_s
 {
 	int fd;
 	int type;
 	int state;
+	int flags;
+
+	buffer_t* rd_buf;
+	buffer_t* wr_buf;
 };
 
 struct listener

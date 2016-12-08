@@ -22,29 +22,16 @@ enum {
 	CORO_FINISH    = 1,
 };
 
-typedef struct coro_switcher_s coro_switcher_t;
-
-struct coro_switcher_s {
-	ucontext_t callee, caller;
-};
-
 typedef struct coro_s coro_t;
-
 typedef int (*coro_fun_t)(coro_t* coro);
 
-coro_t* coro_new(coro_fun_t fun, void* data, int stack_size);
-coro_t* coro_new2(coro_switcher_t* switcher, coro_fun_t fun, void* data, int stack_size);
-
-int coro_reset(coro_t* coro);
+coro_t* coro_new(coro_fun_t fun, void* data, size_t stack_size);
 
 int coro_resume(coro_t* coro);
 int coro_yield_value(coro_t* coro, int value);
 
-int coro_get_state(coro_t* coro);
-int coro_set_state(coro_t* coro, int state);
-
-void* coro_get_data(coro_t* coro);
-void coro_set_data(coro_t* coro, void* data);
+int coro_state(coro_t* coro);
+void* coro_data(coro_t* coro);
 
 int coro_free(coro_t* coro);
 

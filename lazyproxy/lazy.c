@@ -48,7 +48,7 @@ int lazy_net_init(lazy_proxy_t* pxy)
 
 	LOG_INFO("listening: host=%s, ip=%s, port=%d\n", pxy->host, ipbuf, pxy->port);
 
-	int fd = tcp_noblock_resolve(NULL);
+	int fd = tcp_noblock_resolve_fd();
 	if(fd <= 0) {
         LOG_ERROR("tcp_noblock_resolve failed, errno=%d\n", errno);
         return -1;

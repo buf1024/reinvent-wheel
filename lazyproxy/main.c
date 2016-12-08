@@ -19,7 +19,7 @@ static void usage()
             "    -- a very simple http/https demo proxy\n"
             "       using noblock io & coroutine\n\n"
     		"-l     log directory(default: %s)\n"
-    		"-i     listen address(default: %s)\n"
+    		"-a     listen address(default: %s)\n"
             "-p     listen port(default: %d)\n"
             "-e     don't start background\n"
             "-h     show this message\n"
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
         case 'l':
         	strncpy(log_dir, optarg, sizeof(log_dir) - 1);
         	break;
-        case 'i':
+        case 'a':
         	strncpy(addr, optarg, sizeof(addr) - 1);
         	break;
         case 'p':
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 
     if(log_init(LOG_ALL, LOG_DEBUG,
     		g_proxy.log_dir, "lazyproxy",
-			1, 0, 0) != LOG_SUCCESS) {
+			102400, 0, 0) != LOG_SUCCESS) {
     	printf("log_init failed.\n");
     	return -1;
     }

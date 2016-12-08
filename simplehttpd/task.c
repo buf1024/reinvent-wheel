@@ -15,7 +15,8 @@
 
 int write_cmd_msg(int fd, http_msg_t* msg)
 {
-	if(write(fd, msg, sizeof(http_msg_t*)) != sizeof(http_msg_t*)) {
+	intptr_t ptr = (intptr_t)msg;
+	if(write(fd, (void*)&ptr, sizeof(intptr_t)) != sizeof(intptr_t)) {
 		LOG_ERROR("write fd to client failed.\n");
 		return -1;
 	}
@@ -24,11 +25,11 @@ int write_cmd_msg(int fd, http_msg_t* msg)
 
 http_msg_t* read_cmd_msg(int fd)
 {
-	http_msg_t* msg = NULL;
-	if(read(fd, msg, sizeof(http_msg_t*)) != sizeof(http_msg_t*)) {
+	intptr_t ptr = NULL;
+	if(read(fd, &ptr, sizeof(intptr_t)) != sizeof(intptr_t)) {
 		LOG_ERROR("pipe read failed.\n");
 	}
-	return msg;
+	return (http_msg_t*)ptr;
 }
 
 int schedule_fd(httpd_t* http, int fd)
