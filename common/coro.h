@@ -8,13 +8,11 @@
 #ifndef __CORO_H__
 #define __CORO_H__
 
-#include <ucontext.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
 
 enum {
 	CORO_ABORT     = -1,
@@ -31,13 +29,10 @@ typedef int (*coro_schedule_timer_t)(coro_schedule_t*, int);
 
 // coro
 coro_t* coro_new(coro_fun_t fun, void* data, size_t stack_size);
-
 int coro_resume(coro_t* coro);
 int coro_yield_value(coro_t* coro, int value);
-
 int coro_state(coro_t* coro);
 void* coro_data(coro_t* coro);
-
 int coro_free(coro_t* coro);
 
 // coro schedule

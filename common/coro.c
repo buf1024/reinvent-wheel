@@ -7,12 +7,10 @@
 
 #include "coro.h"
 
-
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <stdio.h>
 #include <sys/resource.h>
 #include <sys/time.h>
 
@@ -30,8 +28,8 @@ typedef ucontext_t coro_context_t;
 
 enum
 {
-	EIP = 0,
-	ESP = 7,
+	EIP = 5,
+	ESP = 6,
 };
 enum
 {
