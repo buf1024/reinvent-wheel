@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 
 #include <stddef.h>
 #if defined(__x86_64__)
@@ -45,6 +46,10 @@ enum {
 };
 
 enum {
+	CORO_SCHE_MIN_CAP = 16,
+};
+
+enum {
 	CORO_STATUS_READY    = 0,
 	CORO_STATUS_RUNNING,
 	CORO_STATUS_SUSPEND,
@@ -64,6 +69,21 @@ struct coro_s {
 
 	size_t stack_size;
 	unsigned char* stack;
+};
+
+struct coro_schedule_s
+{
+	coro_schedule_done_t fun_done;
+	coro_schedule_timer_t fun_timer;
+	int timer_value;
+	void* sche_data;
+
+	bool runing;
+
+	size_t cap;
+	coro_t ** coro;
+
+	size_t index;
 };
 
 
@@ -265,6 +285,137 @@ int coro_free(coro_t* coro) {
     	}
         free(coro);
     }
+	return 0;
+}
+
+// sche
+
+static time_t coro_current_millsecond()
+{
+    struct timeval tv = { 0 };
+    gettimeofday(&tv, NULL);
+
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000 ;
+}
+
+coro_schedule_t* coro_schedule_new(coro_schedule_done_t fun_done,
+		coro_schedule_timer_t fun_timer, int timer_value, void* sche_data)
+{
+	coro_schedule_t* sche = (coro_schedule_t*)malloc(sizeof(*sche));
+	if(sche == NULL) return NULL;
+	memset(sche, 0, sizeof(*sche));
+
+	sche->cap = CORO_SCHE_MIN_CAP;
+	sche->coro = (coro_t**)malloc(sizeof(coro_t*) * sche->cap);
+	if(sche->coro == NULL) {
+		free(sche);
+		return NULL;
+	}
+	memset(sche->coro, 0, sizeof(coro_t*)*sche->cap);
+
+	sche->fun_done = fun_done;
+	sche->fun_timer = fun_timer;
+	sche->timer_value = timer_value;
+	sche->sche_data = sche_data;
+
+	return sche;
+}
+int coro_schedule_add(coro_schedule_t* sche, coro_t* coro)
+{
+	if(sche->cap == sche->index) {
+		sche->coro = (coro_t**)realloc(sche->coro, sizeof(coro_t*) * (sche->cap + CORO_SCHE_MIN_CAP));
+		if(sche->coro == NULL) return -1;
+		memset(sche->coro + sche->cap, 0, sizeof(coro_t*) * CORO_SCHE_MIN_CAP);
+		sche->cap += CORO_SCHE_MIN_CAP;
+	}
+	sche->coro[sche->index] = coro;
+	sche->index++;
+
+	return 0;
+}
+int coro_schedule_del(coro_schedule_t* sche, coro_t* coro)
+{
+	for(size_t i=0; i<sche->index; i++) {
+		if(sche->coro[i] == coro) {
+			if(i != sche->index - 1) {
+			    memmove(sche->coro + i, sche->coro + i + 1, sizeof(coro_t*)*(sche->index - i - 1));
+			}
+			sche->index--;
+			sche->coro[sche->index] = NULL;
+			return 0;
+		}
+	}
+	return -1;
+}
+void* coro_schedule_data(coro_schedule_t* sche)
+{
+	return sche->sche_data;
+}
+int coro_schedule_run(coro_schedule_t* sche)
+{
+	bool track_timer = false;
+	if(sche->timer_value > 0 && sche->fun_timer) {
+		track_timer = true;
+	}
+
+	time_t last_time = 0;
+	time_t now_time = 0;
+
+	if(track_timer) {
+		now_time = coro_current_millsecond();
+		last_time = now_time;
+	}
+
+	size_t run_size = sche->index;
+	coro_t** coro = (coro_t**)malloc(sizeof(coro_t*)*run_size);
+	if(!coro) return -1;
+	memcpy(coro, sche->coro, sizeof(coro_t*) * run_size);
+
+	sche->runing = true;
+	while(sche->runing) {
+		if(run_size == 0) {
+			sche->runing = false;
+			break;
+		}
+		for(size_t i=0; i<run_size; i++) {
+			int yield_value = coro_resume(coro[i]);
+			if(sche->fun_done && yield_value != CORO_RESUME) {
+				sche->fun_done(sche, coro[i]);
+			}
+			if(yield_value != CORO_RESUME) {
+				if(i != run_size - 1) {
+				    memmove(coro + i, coro + i + 1, sizeof(coro_t*)*(run_size - i - 1));
+				}
+				run_size--;
+				coro[run_size] = NULL;
+				i--;
+			}
+		}
+		if(track_timer) {
+			now_time = coro_current_millsecond();
+			if(now_time - last_time >= sche->timer_value) {
+				sche->fun_timer(sche, sche->timer_value);
+				last_time = now_time;
+			}
+		}
+	}
+	free(coro);
+
+	return 0;
+}
+int coro_schedule_stop(coro_schedule_t* sche)
+{
+	sche->runing = false;
+	return 0;
+}
+int coro_schedule_free(coro_schedule_t* sche)
+{
+	if(sche) {
+		if(sche->coro) {
+			free(sche->coro);
+		}
+	}
+	free(sche);
 	return 0;
 }
 
