@@ -1,5 +1,5 @@
 CC = cc
-CCFLAGS = -Wall -g -ggdb -I../
+CCFLAGS = -Wall -g -ggdb -fPIC -fpic -I../
 
 LOG_TEST=log_test
 CORO_TEST=coro_test
