@@ -18,7 +18,7 @@ int main(int argc, char **argv)
     event_t* evt = evt_new(0, 0);
     int fd = tcp_server("127.0.0.1", 8585, 128);
     evt_add(evt, fd, EVT_READ);
-    printf("listening...\n");
+    printf("listening 127.0.0.1:8585 ...\n");
 
     poll_event_t* events = NULL;
     while(true) {
@@ -28,8 +28,7 @@ int main(int argc, char **argv)
             break;
         }
         if(rv > 0) {
-            int i = 0;
-            for(;i<rv; i++) {
+            for(int i=0;i<rv; i++) {
                 poll_event_t* e =&(events[i]);
                 if(e->fd == fd) {
                     char ip[32] = {0};
@@ -47,6 +46,8 @@ int main(int argc, char **argv)
                     close(e->fd);
                 }
             }
+        }else if(rv == 0) {
+        	printf("evt timeout, to=%d\n", evt->timeout);
         }
     }
     return 0;

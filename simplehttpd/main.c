@@ -23,7 +23,7 @@ static httpd_t* _httpd = NULL;
 static void usage()
 {
 	printf("\nsimple httpd\n"
-			"\n  -- a simple scratch web server\n\n"
+			"\n  -- a simple practice web server\n\n"
 			"--test, -t <conf file>    test conf file, default simplehttpd.conf\n"
 			"--conf, -c <conf file>    conf file, default simplehttpd.conf\n"
 			"--help, -h                show this message\n"

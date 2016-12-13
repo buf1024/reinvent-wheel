@@ -1,7 +1,7 @@
 /*
  * sock.h
  *
- *  Created on: 2016年6月7日
+ *  Created on: 2016/6/7
  *      Author: Luo Guochun
  */
 

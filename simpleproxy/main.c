@@ -32,7 +32,7 @@ static void sign_handler(int signo)
 static void usage()
 {
 	printf("\nsimple proxy\n"
-			"\n  -- a very simple proxy\n\n"
+			"\n  -- a very simple practice proxy\n\n"
 			"--test,    -t <conf file>    test conf file, default simpleproxy.conf\n"
 			"--conf,    -c <conf file>    conf file, default simpleproxy.conf\n"
 			"--exclude, -e <conf file>    don't start as a daemon process\n"
