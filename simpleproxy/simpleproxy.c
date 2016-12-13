@@ -74,7 +74,7 @@ int proxy_main_loop(simpleproxy_t* proxy)
 int proxy_init(simpleproxy_t* proxy)
 {
 	if(log_init(proxy->log_level, proxy->log_level, proxy->log_path,
-			"simpleproxy", proxy->log_buf_size, 0, -1) != 0) {
+			proxy->log_head, proxy->log_buf_size, 0, -1) != 0) {
 		printf("log_init failed.\n");
 		return -1;
 	}
@@ -190,9 +190,10 @@ void* proxy_task_routine(void* args)
 	for (;;) {
 		int rv = epoll_wait(t->epfd, t->evts, t->nfd, EPOLL_TIMEOUT);
 		if(rv == 0) {
-			if(proxy_timer_task(t) != 0) {
-				LOG_ERROR("proxy_timer_task failed.\n");
-			}
+			//if(proxy_timer_task(t) != 0) {
+			//	LOG_ERROR("proxy_timer_task failed.\n");
+			//}
+			continue;
 		}else if(rv < 0) {
 			if(errno == EINTR) {
 				if(t->proxy->sig_term) {

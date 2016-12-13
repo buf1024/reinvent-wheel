@@ -18,8 +18,9 @@ int parse_conf(simpleproxy_t* proxy)
 	tson_t* s = NULL;
 	char* v = NULL;
 
+	TSON_READ_STR_MUST(t, "log-head", v, s);
+	proxy->log_head = strdup(v);
 	TSON_READ_STR_MUST(t, "log-path", v, s);
-	tson_get_string(t, "log-path", &proxy->log_path);
 	proxy->log_path = strdup(v);
 	TSON_READ_STR_MUST(t, "log-level", v, s);
 	proxy->log_level = log_get_level(v);

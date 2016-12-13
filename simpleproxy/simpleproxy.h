@@ -99,7 +99,7 @@ enum {
 	LISTEN_BACK_LOG      = 128,
 	EPOLL_TIMEOUT        = 1000,
 	DEFAULT_IDEL_TIMEOUT = 3600,
-	DEFAULT_CORO_STACK   = 1024*16,
+	DEFAULT_CORO_STACK   = 1024*8,
 	DEFAULT_BUF_SIZE     = 1024
 };
 
@@ -166,6 +166,7 @@ struct simpleproxy_s
 {
 	char* conf;
 
+	char* log_head;
 	char* log_path;
 	int   log_level;
 	int   log_buf_size;
