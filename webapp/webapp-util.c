@@ -1,15 +1,6 @@
-
-#define _GNU_SOURCE
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/time.h>
 #include <sys/resource.h>
-#include <sys/epoll.h>
-#include <dlfcn.h>
-#include <errno.h>
-#include <unistd.h>
 
+#include "webapp-privt.h"
 #include "webapp-util.h"
 #include "webapp.h"
 
@@ -49,15 +40,6 @@ int get_max_open_file_count(void)
 }
 
 
-
-void *find_symbol(const char *name)
-{
-    void *symbol = dlsym(RTLD_NEXT, name);
-    if (!symbol)
-        symbol = dlsym(RTLD_DEFAULT, name);
-    return symbol;
-}
-
 int epoll_add_fd(int epfd, int evt, int fd)
 {
 	struct epoll_event event;
@@ -96,3 +78,18 @@ int epoll_del_fd(int epfd, int fd)
 	return 0;
 }
 
+const char* http_method_str(int m)
+{
+    static const char* http_methods[] = {
+        [HTTP_GET] = "GET",
+        [HTTP_POST] = "POST",
+        [HTTP_PUT] = "PUT",
+        [HTTP_DELETE] = "DELETE",
+        [HTTP_HEAD] = "HEAD",
+        [HTTP_OPTIONS] = "OPTIONS",
+    };
+
+    assert(m >= 0 && m <= HTTP_OPTIONS);
+
+    return http_methods[m];
+}

@@ -6,12 +6,6 @@
 extern "C" {
 #endif
 
-#ifdef DEBUG
-#  define debug printf
-#else
-#  define debug (void)
-#endif
-
 typedef struct webapp_s webapp_t;
 typedef struct webapp_context_s webapp_context_t;
 typedef void (*webapp_handler_t)(webapp_context_t*);

@@ -1,89 +1,7 @@
 
-#define _GNU_SOURCE
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sys/epoll.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <errno.h>
-
-#include "webapp-tree.h"
-#include "webapp-util.h"
-#include "webapp-sock.h"
+#include "webapp-privt.h"
 #include "webapp.h"
-
-#define DEFAULT_LISTEN_HOST      "127.0.0.1:8080"
-#define DEFAULT_LISTEN_BACK_LOG  128
-
-typedef struct webapp_thread_s webapp_thread_t;
-typedef struct connection_s connection_t;
-typedef struct buffer_s buffer_t;
-
-enum {
-    HTTP_GET    = 0,
-    HTTP_POST,
-    HTTP_PUT,
-    HTTP_DELETE,
-    HTTP_HEAD,
-    HTTP_OPTIONS,
-	HTTP_METHODS,
-};
-static const char* http_methods[] = {
-	[HTTP_GET]       = "GET",
-    [HTTP_POST]      = "POST",
-    [HTTP_PUT]       = "PUT",
-    [HTTP_DELETE]    = "DELETE",
-    [HTTP_HEAD]      = "HEAD",
-    [HTTP_OPTIONS]   = "OPTIONS",
-};
-
-struct connection_s
-{
-	int fd;
-	int type;
-	int state;
-
-	buffer_t* rbuf;
-	buffer_t* wbuf;
-};
-struct buffer_s
-{
-	int size;
-	char* cache;
-};
-
-struct webapp_thread_s
-{
-	webapp_t* web;
-
-	int fd[2];
-	int epfd;
-
-	int nfd;	
-    struct epoll_event* evts;
-	pthread_t tid;
-};
-
-struct webapp_s {
-	int   thread_num;
-    webapp_thread_t* threads;
-	size_t nfd;
-    connection_t* conns;
-
-	int epfd;
-	struct epoll_event* evts;
-    int main_fd;
-    webapp_tree_t* tree[HTTP_METHODS];
-
-	pthread_barrier_t* barrier;
-	pthread_t job_tid;
-};
+#include "webapp-task.h"
 
 static bool running = false;
 static pthread_mutex_t job_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -133,56 +51,20 @@ static void* work_thread(void* data)
 	webapp_t* web = t->web;
 	// todo things to wait
 	pthread_barrier_wait(web->barrier);
-
-	connection_t* con = NULL;
-
+    debug("work thread(%ld) loop start.\n", t->tid);
+	
 	for (;;) {
-		int rv = epoll_wait(t->epfd, t->evts, t->nfd, 100);
-		if(rv == 0) {
-		} else if (rv < 0) {
-			//if (t->http->sig_term || t->http->sig_usr1 || t->http->sig_usr2) {
-			//	continue;
-			//}
-			debug("epoll_wait error, errno=%d\n", errno);
+		if(webapp_task_read(t) != 0) {
+			debug("webapp_task_read failed.\n");
 			break;
-		}else{
-			for(int i=0;i<rv; i++) {
-				struct epoll_event* ev = &(t->evts[i]);
-				int fd = (int)ev->data.ptr;
-				con = &(web->conns[fd]);
-
-				if(con->fd == t->fd[0]) {
-					intptr_t ptr = NULL;
-					if(read(con->fd, &ptr, sizeof(intptr_t)) != sizeof(intptr_t)) {
-						debug("pipe read failed.\n");
-						continue;
-					}
-					int fd = (int)ptr;
-					debug("thread accept: fd=%d\n", fd);
-
-					tcp_nodelay(fd, true);
-					tcp_noblock(fd, true);
-
-
-					con =  &(web->conns[fd]);
-					con->fd = fd;
-
-					if(epoll_add_fd(t->epfd, EPOLLIN, fd) < 0) {
-						debug("epoll_add_fd failed.\n");
-						close(fd);
-						continue;
-					}
-				}
-				//if(http_req_task(t, con) != 0) {
-				//	LOG_ERROR("proxy_biz_task failed.\n");
-				//}
-				//if(con->state == CONN_STATE_BROKEN) {
-				//	LOG_INFO("connection is broken, delete it.\n");
-				//	epoll_del_fd(t->epfd, con);
-				//	close(con->fd);
-				//}
-
-			}
+		}
+		if(webapp_task_process(t) != 0) {
+			debug("webapp_task_process failed.\n");
+			break;
+		}
+		if(webapp_task_write(t) != 0) {
+			debug("webapp_task_write failed.\n");
+			break;
 		}
 	}
 	return NULL;
@@ -358,6 +240,11 @@ int webapp_run(webapp_t* web, const char* host)
 			return -1;
 		}
 	}
+
+	pthread_barrier_wait(web->barrier);
+	pthread_barrier_destroy(web->barrier);
+	web->barrier = NULL;
+	debug("main loop start.\n");
 
 	for(;;) {
 

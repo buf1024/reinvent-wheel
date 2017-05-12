@@ -19,7 +19,7 @@ int main()
     HEAD(web, "/head", handler);
     OPTIONS(web, "/option", handler);
 
-    debug("webapp running at:*8080");
+    printf("webapp running at:*8080");
     webapp_run(web, "*:8080");
 
     webapp_destroy(web);
