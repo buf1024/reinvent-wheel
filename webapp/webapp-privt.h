@@ -72,6 +72,8 @@ struct webapp_thread_s
 	int nfd;	
     struct epoll_event* evts;
 	pthread_t tid;
+
+    webapp_list_t work_queue;
 };
 
 struct webapp_s {
@@ -87,6 +89,8 @@ struct webapp_s {
 
 	pthread_barrier_t* barrier;
 	pthread_t job_tid;
+
+    webapp_list_t job_queue;
 };
 
 struct webapp_list_node_s {
