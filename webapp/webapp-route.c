@@ -6,6 +6,9 @@
 
 #include "webapp-route.h"
 
+#define ROUTE_MAX_DEPTH 128
+#define ROUTE_MAX_PATH  256
+
 static route_node_t* find_node(route_node_t** nodes, int nodes_num, const char* path,
     int s_index, int e_index)
 {
@@ -40,6 +43,7 @@ int route_destroy(route_t* route)
 int add_route(route_t* route, const char* path, void* handler, ...)
 {
     if(!route || !handler || !path || strlen(path) == 0 || path[0] != '/') return -1;
+    
     
     enum route_note_type_t type = NODE_TYPE_NONE;
 
