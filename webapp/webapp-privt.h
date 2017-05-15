@@ -16,7 +16,7 @@
 #include <assert.h>
 
 #include "webapp.h"
-#include "webapp-tree.h"
+#include "webapp-route.h"
 #include "webapp-util.h"
 #include "webapp-sock.h"
 #include "list.h"
@@ -85,7 +85,7 @@ struct webapp_s {
 	int epfd;
 	struct epoll_event* evts;
     int main_fd;
-    webapp_tree_t* tree[HTTP_METHODS];
+    route_t* route[HTTP_METHODS];
 
 	pthread_barrier_t* barrier;
 	pthread_t job_tid;

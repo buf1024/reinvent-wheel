@@ -1,12 +1,12 @@
 CC = cc
-CCFLAGS = -I../ -std=gnu99 -O0 -Wall -Wextra -DDEBUG -g -ggdb -fPIC -fpic
+CCFLAGS = -I../../ -std=gnu99 -O0 -Wall -Wextra -DDEBUG -g -ggdb -fPIC -fpic
 
-EXE = webapp-test
+EXE = webapp-unittest
 
 OBJS=$(patsubst %.c,%.o,$(wildcard *.c))
 
 
-EXT_CCFLAGS = -rdynamic -L../ -lwebapp -lpthread -ldl 
+EXT_CCFLAGS = -rdynamic -L../../ -lwebapp -lpthread -ldl 
 
 all:$(EXE)
 

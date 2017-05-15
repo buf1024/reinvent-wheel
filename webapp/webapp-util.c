@@ -93,3 +93,39 @@ const char* http_method_str(int m)
 
     return http_methods[m];
 }
+int split(const char* text, char needle, char** dest, int size, int num)
+{
+    if (!text || text[0] == 0 || !dest || size <= 0 || num <= 0) {
+        return -1;
+    }
+    const char* orig = text;
+    const char* tmp = text;
+
+    int cur_num = 0;
+    while ((tmp = strchr(tmp, needle)) != NULL) {
+        int len = tmp - orig;
+
+        if (len >= size) {
+            return -1;
+        }
+        if (cur_num >= num) {
+            return -1;
+        }
+
+        memcpy((char*)dest + size*cur_num, orig, len);
+        *((char*)dest + size*cur_num + len) = 0;
+
+        cur_num++;
+        tmp++;
+        orig = tmp;
+    }
+    if(orig != NULL){
+        strcpy((char*)dest + size*cur_num, orig);
+        cur_num ++ ;
+    }
+    if(cur_num == 0){
+        strcpy((char*)dest, text);
+        cur_num++;
+    }
+    return cur_num;
+}

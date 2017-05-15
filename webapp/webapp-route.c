@@ -5,27 +5,11 @@
 #include <stdarg.h>
 
 #include "webapp-route.h"
+#include "webapp-util.h"
 
 #define ROUTE_MAX_DEPTH 128
 #define ROUTE_MAX_PATH  256
 
-static route_node_t* find_node(route_node_t** nodes, int nodes_num, const char* path,
-    int s_index, int e_index)
-{
-    for(int i=0; i<nodes_num; i++) {
-        route_node_t* node = nodes[i];
-        if(node == NULL) {
-            return NULL;
-        }
-        if (node->type == NODE_TYPE_PARAM || node->type == NODE_TYPE_WILDCARD){
-            return node;
-        }
-        if (strncmp(node->path, path+s_index, e_index - s_index) == 0){
-            return node;
-        }
-    }
-    return NULL;
-}
 
 route_t* route_new(void* data)
 {
@@ -35,139 +19,185 @@ route_t* route_new(void* data)
     r->data = data;
     return r;
 }
-int route_destroy(route_t* route)
-{
+static int route_destroy_node(route_node_t* nodes) {
+    if(!nodes) return 0;
+    if(nodes->nodes_num == 0) {
+        if(nodes->handlers) free(nodes->handlers);
+        free(nodes);
+    }else{
+        for(int i=0; i<nodes->nodes_num; i++) {
+            route_destroy_node(nodes->nodes);
+        }
+        free(nodes->nodes);
+        if(nodes->handlers) free(nodes->handlers);
+        free(nodes);
+    }
     return 0;
 }
+int route_destroy(route_t* route)
+{
+    if(!route) return 0;
 
-int add_route(route_t* route, const char* path, void* handler, ...)
+    return route_destroy_node(route->nodes);    
+}
+
+int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
 {
     if(!route || !handler || !path || strlen(path) == 0 || path[0] != '/') return -1;
     
-    
     enum route_note_type_t type = NODE_TYPE_NONE;
 
-    int* nodes_num = NULL;
-    route_node_t*** nodes = NULL;
-    
+    char vec_path[ROUTE_MAX_DEPTH][ROUTE_MAX_PATH] = {0};
+    int vec_path_num = split(path+1, '/', vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
+
+    route_node_t** nodes = &(route->nodes);
+    int* nodes_num = &(route->nodes_num);
     route_node_t* node = NULL;
-    if(!route->nodes) {
-        route->nodes_num++;
-        
-        // todo oom check
-        route->nodes = (route_node_t**)calloc(route->nodes_num, sizeof(route_node_t*));
-    }
-    nodes = &(route->nodes);
-    nodes_num = &(route->nodes_num);
 
-    int offset = 0;
+    for (int i = 0; i < vec_path_num; i++) {
+        const char* tpath = vec_path[i];
+        enum route_note_type_t type = NODE_TYPE_ABS;
 
-    int index = 1;
-    const char* p = path;
-    while(p[index]) {
-        char ch = p[index];
-        if (ch != ':' && ch != '*' && ch != '/') {
-            index++;
-            continue;
-        }
-        if(ch == '/') {
-            node = find_node(*nodes, nodes_num, path, offset, index);
-            if (node && node->type != NODE_TYPE_NONE ){
-                // duplicate
-                return -1;
-            }
-            if (!node){
-                (*nodes_num)++;
-                // todo oom check
-                *nodes = realloc(*nodes, sizeof(route_node_t*));
-                *nodes[(*nodes_num) - 1] = calloc(1, sizeof(route_node_t));
-                node = *nodes[(*nodes_num) - 1];
-            }
-            int sz = index - offset + 1;
-            char* sub_path = (char*)calloc(1, sz);
-            memcpy(sub_path, path + offset, sz - 1);
-            offset = index;
-
-            type = NODE_TYPE_ABS;
-
-            index++;
-            continue;
-        }
-        if(ch == '*') {
-            node = find_node(*nodes, nodes_num, path, offset, index);
-            if (node != NULL) {
-                return -1;
-            }
-            if(p[index - 1] != '/') {
-                // no start witch /
-                return -1;
-            }
-            if(!p[index + 1]) {
+        if(tpath[0] == '*' || tpath[0] == ':') {
+            if(!tpath[1]) {
                 // no name
                 return -1; 
             }
-            int j = index+1;
-            while (p[j]) {
-                if(!isalnum(p[j])) {
+            int j = 1;
+            while (tpath[j]) {
+                if(!isalnum(tpath[j])) {
                     // no alpha or num
                     return -1;
                 }
                 j++;
             }
-            int sz = strlen(path) - index + 1;
-            char* sub_path = (char*)calloc(1, sz);
-            memcpy(sub_path, path + offset, sz - 1);
-            offset = index;
-
-            type = NODE_TYPE_WILDCARD;
-            break;
+            if(tpath[0] == '*') type = NODE_TYPE_WILDCARD;
+            if(tpath[0] == ':') type = NODE_TYPE_PARAM;
         }
+        
+        if(*nodes == NULL) {
+            *nodes  = calloc(1, sizeof(route_node_t));
+            (*nodes_num)++;
 
-        if(ch == ':') {
-            node = find_node(*nodes, nodes_num, path, offset, index);
-            if (node && node->type != NODE_TYPE_NONE ){
-                // duplicate
-                return -1;
+            node = &((*nodes)[0]);
+        }else{
+            route_node_t* t = NULL;
+            for (int j = 0; j < *nodes_num; j++) {
+                t = &((*nodes)[j]);
+
+                if (t->type == NODE_TYPE_PARAM || t->type == NODE_TYPE_WILDCARD) {
+                    // exists wildcard
+                    return -1;
+                }
+                if (strcmp(t->path, vec_path[i]) == 0) {
+                    if (t->type != NODE_TYPE_NONE && i == vec_path_num - 1) {
+                        // exists abs path
+                        return -1;
+                    }
+                    nodes = &(t->nodes);
+                    nodes_num = &(t->nodes_num);
+                    j = 0;
+                }
             }
-            if (!node){
-                (*nodes_num)++;
-                // todo oom check
-                *nodes = realloc(*nodes, sizeof(route_node_t*));
-                *nodes[(*nodes_num) - 1] = calloc(1, sizeof(route_node_t));
-                node = *nodes[(*nodes_num) - 1];
+            (*nodes_num)++;
+            if (*nodes == NULL) {
+                *nodes = calloc(1, sizeof(route_info_t));
+            } else {
+                *nodes = realloc(*nodes, *nodes_num * sizeof(route_node_t));
             }
+            node = &((*nodes)[*nodes_num - 1]);
+            memset(node, 0, sizeof(*node));
         }
+        node->type = type;
+        if(type == NODE_TYPE_ABS && i != vec_path_num - 1) node->type = NODE_TYPE_NONE;
+        node->path = strdup(tpath);
+
+        nodes = &(node->nodes);
+        nodes_num = &(node->nodes_num);
     }
-    node->type = type;
+
     node->handlers_num++;
-    if(node->handlers != NULL) {
-        node->handlers = realloc(node->handlers, node->handlers_num*sizeof(void*));
-        node->handlers[node->handlers_num - 1] = handler;
-    }else{
-        node->handlers = calloc(1, sizeof(void*));
-        node->handlers[node->handlers_num - 1] = handler;
-    }
+    node->handlers = calloc(1, sizeof(webapp_handler_t));
+    node->handlers[node->handlers_num - 1] = handler;
+    
     va_list ap;
     va_start(ap, handler);
     while (1) {
-        void* h = va_arg(ap, void*);
+        webapp_handler_t h = va_arg(ap, webapp_handler_t);
         if (h == NULL)
             break;
 
         node->handlers_num++;
-        node->handlers = realloc(node->handlers, node->handlers_num * sizeof(void*));
+        node->handlers = realloc(node->handlers, node->handlers_num * sizeof(webapp_handler_t));
         node->handlers[node->handlers_num - 1] = h;
     }
     va_end(ap);
 
     return 0;
 }
-route_info_t* get_route(route_t* route, const char* path)
+route_info_t* route_get(route_t* route, const char* path)
 {
-    return NULL;
-}
+        if(!route || !path || strlen(path) == 0 || path[0] != '/') NULL;
+    
+    enum route_note_type_t type = NODE_TYPE_NONE;
 
-int route_info_free(route_info_t* info)
+    char vec_path[ROUTE_MAX_DEPTH][ROUTE_MAX_PATH] = {0};
+    int vec_path_num = split(path+1, '/', vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
+
+    route_node_t* nodes = &(route->nodes);
+    route_node_t* node = NULL;
+
+    int param_num = 0;
+    param_t* param = NULL;
+
+    for (int i = 0; i < vec_path_num; i++) {
+        const char* tpath = vec_path[i];
+        for(int j=0; j<nodes->nodes_num; j++) {
+            bool found = false;
+            node = &(nodes[j]);
+            if(node->type == NODE_TYPE_PARAM || node->type == NODE_TYPE_WILDCARD) {
+                param_num++;
+                if(param == NULL) {
+                    param = calloc(1, sizeof(param_t));
+                }else{
+                    param = realloc(param, param_num * sizeof(param_t));
+                }
+                param[param_num-1].key = strdup(node->path + 1);
+                param[param_num-1].val = strdup(tpath);
+
+                nodes = &(node->nodes);
+                found = true;;
+            }
+            if(strcmp(node->path, tpath) == 0) {
+                nodes = &(node->nodes);
+                found = true;;
+            }
+            if(i == vec_path_num - 1 && !found) {
+                node = NULL;
+            }
+        }
+    }
+    if(node == NULL) {
+        if(param) free(param);
+        return NULL;
+    }
+    //todo tsr
+    route_info_t* route_info = calloc(1, sizeof(*route_info));
+    
+    route_info->handlers_num = node->handlers_num;
+    route_info->handlers = calloc(node->handlers_num, sizeof(webapp_handler_t));
+    memcpy(route_info->handlers, node->handlers, node->handlers_num*sizeof(webapp_handler_t));
+
+    route_info->params = param;
+    route_info->params_num = param_num;
+
+    return route_info;
+}
+void route_info_free(route_info_t* info)
 {
-    return 0;
+    if(info) {
+        if(info->handlers) free(info->handlers);
+        if(info->params) free(info->params);
+        free(info);
+    }
 }
