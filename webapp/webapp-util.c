@@ -40,13 +40,13 @@ int get_max_open_file_count(void)
 }
 
 
-int epoll_add_fd(int epfd, int evt, int fd)
+int epoll_add_fd(int epfd, int evt, connection_t* con)
 {
 	struct epoll_event event;
 	event.events = evt | EPOLLERR | EPOLLHUP;
-	event.data.ptr = fd;
+	event.data.ptr = con;
 
-	if(epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &event) != 0) {
+	if(epoll_ctl(epfd, EPOLL_CTL_ADD, con->fd, &event) != 0) {
 		debug("epoll add failed, errno=%d\n", errno);
 		return -1;
 	}
@@ -54,24 +54,24 @@ int epoll_add_fd(int epfd, int evt, int fd)
 }
 
 
-int epoll_mod_fd(int epfd, int evt, int fd)
+int epoll_mod_fd(int epfd, int evt, connection_t* con)
 {
 	struct epoll_event event;
 	event.events = evt | EPOLLERR | EPOLLHUP;
-	event.data.ptr = fd;
+	event.data.ptr = con;
 
-	if(epoll_ctl(epfd, EPOLL_CTL_MOD, fd, &event) != 0) {
+	if(epoll_ctl(epfd, EPOLL_CTL_MOD, con->fd, &event) != 0) {
 		debug("epoll add failed, errno=%d\n", errno);
 		return -1;
 	}
 	return 0;
 }
 
-int epoll_del_fd(int epfd, int fd)
+int epoll_del_fd(int epfd, connection_t* con)
 {
 	struct epoll_event event;
 
-	if(epoll_ctl(epfd, EPOLL_CTL_DEL, fd, &event) != 0) {
+	if(epoll_ctl(epfd, EPOLL_CTL_DEL, con->fd, &event) != 0) {
 		debug("epoll del failed, errno=%d\n", errno);
 		return -1;
 	}

@@ -12,6 +12,8 @@ static webapp_t* the_webapp = NULL;
 
 static void* job_thread(void *data)
 {
+	webapp_t* web = (webapp_t*)data;
+	debug("job thread(%ld)", web->job_tid);
     pthread_mutex_lock(&job_wait_mutex);
     int job_wait_sec = 1;
     
@@ -81,7 +83,7 @@ int schedule_fd(webapp_t* web, int fd)
 	debug("select thread %d to handle.\n", index);
 
 	intptr_t ptr = (intptr_t)fd;
-	if(write(fd, (void*)&ptr, sizeof(intptr_t)) != sizeof(intptr_t)) {
+	if(write(t->fd[1], (void*)&ptr, sizeof(intptr_t)) != sizeof(intptr_t)) {
 		debug("write fd to client failed.\n");
 		return -1;
 	}
@@ -131,7 +133,7 @@ webapp_t* webapp_new()
         connection_t* con = &(web->conns[t->fd[0]]);
         con->fd = t->fd[0];
 
-        if (epoll_add_fd(t->epfd, EPOLLIN, con->fd) != 0) {
+        if (epoll_add_fd(t->epfd, EPOLLIN, con) != 0) {
             debug("epoll_add_fd failed.\n");
             goto ERR;
         }
@@ -228,7 +230,7 @@ int webapp_run(webapp_t* web, const char* host)
 
     connection_t* con = &web->conns[fd];
     con->fd = fd;
-    if (epoll_add_fd(web->epfd, EPOLLIN, fd) != 0) {
+    if (epoll_add_fd(web->epfd, EPOLLIN, con) != 0) {
         debug("epoll add failed.\n");
         return -1;
     }
@@ -289,9 +291,19 @@ int webapp_run(webapp_t* web, const char* host)
     return 0;
 }
 
-int webapp_use(webapp_t* web, webapp_handler_t handler)
+webapp_t* webapp_use(webapp_t* web, webapp_handler_t handler)
 {
-    return 0;
+	web->midware_num++;
+	if(!web->midware) {
+		web->midware = calloc(1, sizeof(webapp_handler_t));
+		web->midware[0] = handler;
+		return web;
+	}
+	
+	web->midware = realloc(web->midware, web->midware_num * sizeof(webapp_handler_t));
+	web->midware[web->midware_num-1] = handler;
+
+    return web;
 }
 webapp_t* webapp_group(webapp_t* web, const char* pattern)
 {

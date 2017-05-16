@@ -39,35 +39,40 @@ int route_destroy(route_t* route)
         route_destroy_node(&(route->nodes[i]));
     }
     if(route->nodes) free(route->nodes);
-    if(route->root_handlers) free(route->root_handlers);
+    if(route->handlers) free(route->handlers);
     free(route);
     return 0;
 }
+static int route_add_handlers(webapp_handler_t handler, va_list ap, 
+    int* handlers_num, webapp_handler_t** handlers)
+{
+    *handlers_num = 1;
+    *handlers = calloc(1, sizeof(webapp_handler_t));
+    (*handlers)[*handlers_num - 1] = handler;
 
+    while (1) {
+        webapp_handler_t h = va_arg(ap, webapp_handler_t);
+        if (h == NULL)
+            break;
+
+        (*handlers_num)++;
+        (*handlers) = realloc((*handlers), (*handlers_num) * sizeof(webapp_handler_t));
+        handlers[(*handlers_num) - 1] = h;
+    }
+    return 0;
+}
 int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
 {
     if(!route || !handler || !path || strlen(path) == 0 || path[0] != '/') return -1;
 
     if (path[1] == 0) {
-        if (route->root_handlers)
-            free(route->root_handlers);
-
-        route->root_handers_num = 1;
-        route->root_handlers = calloc(1, sizeof(webapp_handler_t));
-        route->root_handlers[route->root_handers_num - 1] = handler;
+        if (route->handlers) free(route->handlers);       
 
         va_list ap;
         va_start(ap, handler);
-        while (1) {
-            webapp_handler_t h = va_arg(ap, webapp_handler_t);
-            if (h == NULL)
-                break;
-
-            route->root_handers_num++;
-            route->root_handlers = realloc(route->root_handlers, route->root_handers_num * sizeof(webapp_handler_t));
-            route->root_handlers[route->root_handers_num - 1] = h;
-        }
+        route_add_handlers(handler, ap, &(route->handlers_num), &(route->handlers));
         va_end(ap);
+
         return 0;
     }
 
@@ -103,7 +108,7 @@ int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
                 j++;
             }
             if(tpath[0] == '*') {
-                // 只能最后一个
+                // only allow the last
                 if(i != vec_path_num - 1) return -1;
                 type = NODE_TYPE_WILDCARD;
             }
@@ -183,21 +188,10 @@ int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
     }
 
     node->tsr = tsr;
-    node->handlers_num++;
-    node->handlers = calloc(1, sizeof(webapp_handler_t));
-    node->handlers[node->handlers_num - 1] = handler;
-    
+
     va_list ap;
     va_start(ap, handler);
-    while (1) {
-        webapp_handler_t h = va_arg(ap, webapp_handler_t);
-        if (h == NULL)
-            break;
-
-        node->handlers_num++;
-        node->handlers = realloc(node->handlers, node->handlers_num * sizeof(webapp_handler_t));
-        node->handlers[node->handlers_num - 1] = h;
-    }
+    route_add_handlers(handler, ap, &(node->handlers_num), &(node->handlers));
     va_end(ap);
 
     return 0;
@@ -209,9 +203,9 @@ route_info_t* route_get(route_t* route, const char* path)
     if (path[1] == 0) {
         route_info_t* route_info = calloc(1, sizeof(*route_info));
 
-        route_info->handlers_num = route->root_handers_num;
-        route_info->handlers = calloc(route->root_handers_num, sizeof(webapp_handler_t));
-        memcpy(route_info->handlers, route->root_handlers, route->root_handers_num * sizeof(webapp_handler_t));
+        route_info->handlers_num = route->handlers_num;
+        route_info->handlers = calloc(route->handlers_num, sizeof(webapp_handler_t));
+        memcpy(route_info->handlers, route->handlers, route->handlers_num * sizeof(webapp_handler_t));
         return route_info;
     }
 
@@ -274,9 +268,9 @@ route_info_t* route_get(route_t* route, const char* path)
         if(param) free(param);
         return NULL;
     }
-    //todo tsr
     route_info_t* route_info = calloc(1, sizeof(*route_info));
     
+    route_info->tsr = node->tsr;
     route_info->handlers_num = node->handlers_num;
     route_info->handlers = calloc(node->handlers_num, sizeof(webapp_handler_t));
     memcpy(route_info->handlers, node->handlers, node->handlers_num*sizeof(webapp_handler_t));
@@ -325,9 +319,9 @@ static void route_walk_node(const char* prefix, route_node_t* node)
 void route_walk(route_t* route)
 {
     if(!route) return;
-    if(route->root_handlers) {
+    if(route->handlers) {
         printf("/");
-        print_hanlders(route->root_handers_num, route->root_handlers);
+        print_hanlders(route->handlers_num, route->handlers);
     }
     for(int i=0; i<route->nodes_num; i++) {
         route_walk_node("/", &(route->nodes[i]));

@@ -4,19 +4,19 @@
 #include "webapp.h"
 
 
-/* Pattern: /user/:user
+// Pattern: /user/:user
 
- /user/gordon              match
- /user/you                 match
- /user/gordon/profile      no match
- /user/                    no match
+// /user/gordon              match
+// /user/you                 match
+// /user/gordon/profile      no match
+// /user/                    no match
 
- Pattern: /src/*filepath
+// Pattern: /src/*filepath
 
- /src/                     match
- /src/somefile.go          match
- /src/subdir/somefile.go   match
-*/
+// /src/                     match
+// /src/somefile.go          match
+// /src/subdir/somefile.go   match
+
 
 typedef struct route_s route_t;
 typedef struct route_node_s route_node_t;
@@ -44,8 +44,8 @@ struct route_s {
     route_node_t* nodes;
     void* data;
 
-    int root_handers_num;
-    webapp_handler_t* root_handlers;
+    int handlers_num;
+    webapp_handler_t* handlers;
 };
 
 enum route_note_type_t {

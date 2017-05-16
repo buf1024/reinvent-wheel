@@ -73,7 +73,8 @@ struct webapp_thread_s
     struct epoll_event* evts;
 	pthread_t tid;
 
-    webapp_list_t work_queue;
+    webapp_list_t read_queue;
+	webapp_list_t write_queue;
 };
 
 struct webapp_s {
@@ -91,6 +92,9 @@ struct webapp_s {
 	pthread_t job_tid;
 
     webapp_list_t job_queue;
+
+	int midware_num;
+	webapp_handler_t* midware;
 };
 
 struct webapp_list_node_s {
