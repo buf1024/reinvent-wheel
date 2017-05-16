@@ -1,5 +1,5 @@
 CC = cc
-CCFLAGS = -I../../ -std=gnu99 -O0 -Wall -Wextra -DDEBUG -g -ggdb -fPIC -fpic
+CCFLAGS = -I../../ -std=gnu99 -O0 -Wall -DDEBUG -g -ggdb -fPIC -fpic
 
 EXE = webapp-unittest
 
