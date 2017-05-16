@@ -1,7 +1,24 @@
-
+#include <stdarg.h>
 #include "webapp-privt.h"
 #include "webapp.h"
 #include "webapp-task.h"
+
+#define WEBAPP_DO_ADD_HANDLER(w, m, p)                    \
+    do {                                                  \
+        if (!w->route[m]) {                               \
+            web->route[m] = route_new(w);                 \
+        }                                                 \
+        int n = 0;                                        \
+        webapp_handler_t* h = NULL;                       \
+        va_list ap;                                       \
+        va_start(ap, p);                                  \
+        webapp_va_handlers(ap, &n, &h);                   \
+        va_end(ap);                                       \
+        w = webapp_http_handler(w, w->route[m], p, n, h); \
+        if (h) {                                          \
+            free(h);                                      \
+        }                                                 \
+    } while (0)
 
 static bool running = false;
 static pthread_mutex_t job_wait_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -261,8 +278,7 @@ int webapp_run(webapp_t* web, const char* host)
 		} else {
 			for (int i = 0; i < rv; i++) {
 				struct epoll_event* ev = &(web->evts[i]);
-				fd = (int) ev->data.ptr;
-				connection_t* con = &(web->conns[fd]);
+				connection_t* con = (connection_t*) ev->data.ptr;
 
 				struct sockaddr_storage sa;
 				socklen_t salen = sizeof(sa);
@@ -293,48 +309,136 @@ int webapp_run(webapp_t* web, const char* host)
 
 webapp_t* webapp_use(webapp_t* web, webapp_handler_t handler)
 {
-	web->midware_num++;
-	if(!web->midware) {
-		web->midware = calloc(1, sizeof(webapp_handler_t));
-		web->midware[0] = handler;
-		return web;
-	}
+    if (!web->group) {
+        web->midware_num++;
+        if (!web->midware) {
+            web->midware = calloc(1, sizeof(webapp_handler_t));
+            web->midware[0] = handler;
+            return web;
+        }
 
-	web->midware = realloc(web->midware, web->midware_num * sizeof(webapp_handler_t));
-	web->midware[web->midware_num-1] = handler;
+        web->midware = realloc(web->midware, web->midware_num * sizeof(webapp_handler_t));
+        web->midware[web->midware_num - 1] = handler;
+    } else {
+		web->group_midware_num++;
+        if (!web->group_midware) {
+            web->group_midware = calloc(1, sizeof(webapp_handler_t));
+            web->group_midware[0] = handler;
+            return web;
+        }
+
+        web->group_midware = realloc(web->group_midware, web->group_midware_num * sizeof(webapp_handler_t));
+        web->midware[web->group_midware_num - 1] = handler;
+    }
 
     return web;
 }
 webapp_t* webapp_group_begin(webapp_t* web, const char* pattern)
 {
+	if(pattern == NULL || pattern[0] == 0) return NULL;
+	
+	webapp_group_end(web);
+	web->group = true;
+	web->group_pattern = strdup(pattern);
+
     return web;
 }
 webapp_t* webapp_group_end(webapp_t* web)
 {
+	web->group = false;
+	if(web->group_pattern) {
+		free(web->group_pattern);
+		web->group_pattern = NULL;
+	}
+	if(web->group_midware) {
+		free(web->group_midware);
+		web->group_midware = NULL;
+		web->group_midware_num = 0;
+	}
     return web;
 }
 
+static int webapp_merge_handlers(int src_num1, webapp_handler_t* src_handlers1,
+	int src_num2, webapp_handler_t* src_handlers2, 
+	int src_num3, webapp_handler_t* src_handlers3,
+	int* dst_num, webapp_handler_t** dst_handlers)
+{
+	*dst_num = src_num1 + src_num2;
+	*dst_handlers = calloc(*dst_num, sizeof(webapp_handler_t));
+	
+	for(int i=0; i<src_num1; i++){
+		(*dst_handlers)[i] = src_handlers1[i];
+	}
+	for(int i=0; i<src_num2; i++){
+		(*dst_handlers)[src_num1 - i] = src_handlers2[i];
+	}
+	for(int i=0; i<src_num3; i++){
+		(*dst_handlers)[src_num1 + src_num2- i] = src_handlers3[i];
+	}
+	return 0;
+}
+
+static webapp_t* webapp_http_handler(webapp_t* web, route_t* route, const char* pattern, 
+	int num, webapp_handler_t* handlers)
+{
+	int n = 0;
+	webapp_handler_t* h = NULL;
+
+	webapp_merge_handlers(web->midware_num, web->midware, 
+		web->group_midware_num, web->group_midware,
+		num, handlers, &n, &h);
+	
+	if(route_add_group(route, pattern, n, h) != 0) {
+		if(h) free(h);
+		return NULL;
+	}
+	return web;	
+}
+static int webapp_va_handlers(va_list ap, int* num, webapp_handler_t** handlers)
+{
+	while (1){
+        webapp_handler_t h = va_arg(ap, webapp_handler_t);
+        if (h == NULL)
+            break;
+
+        (*num)++;
+		if(!(*handlers)) {
+			*handlers = calloc(1, sizeof(webapp_handler_t));
+			(*handlers)[0] = h;
+			continue;
+		}
+        (*handlers) = realloc((*handlers), (*num) * sizeof(webapp_handler_t));
+        (*handlers)[(*num) - 1] = h;
+	}
+	return 0;
+}
 webapp_t* webapp_get(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_GET, pattern);
+	return web;
 }
 webapp_t* webapp_post(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_POST, pattern);
+	return web;
 }
 webapp_t* webapp_put(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_PUT, pattern);
+	return web;
 }
 webapp_t* webapp_delete(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_DELETE, pattern);
+	return web;
 }
 webapp_t* webapp_head(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_HEAD, pattern);
+	return web;
 }
 webapp_t* webapp_options(webapp_t* web, const char* pattern, ...)
 {
-    return web;
+	WEBAPP_DO_ADD_HANDLER(web, HTTP_OPTIONS, pattern);
+	return web;
 }
