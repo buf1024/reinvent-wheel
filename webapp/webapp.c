@@ -299,13 +299,17 @@ webapp_t* webapp_use(webapp_t* web, webapp_handler_t handler)
 		web->midware[0] = handler;
 		return web;
 	}
-	
+
 	web->midware = realloc(web->midware, web->midware_num * sizeof(webapp_handler_t));
 	web->midware[web->midware_num-1] = handler;
 
     return web;
 }
-webapp_t* webapp_group(webapp_t* web, const char* pattern)
+webapp_t* webapp_group_begin(webapp_t* web, const char* pattern)
+{
+    return web;
+}
+webapp_t* webapp_group_end(webapp_t* web)
 {
     return web;
 }

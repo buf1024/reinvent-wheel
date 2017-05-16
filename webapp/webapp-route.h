@@ -71,6 +71,7 @@ struct route_node_s {
 route_t* route_new(void* data);
 int route_destroy(route_t* route);
 
+int route_add_group(route_t* route, const char* path, int num, webapp_handler_t* handler);
 int route_add(route_t* route, const char* path, webapp_handler_t handler, ...);
 route_info_t* route_get(route_t* route, const char* path);
 void route_info_free(route_info_t* info);

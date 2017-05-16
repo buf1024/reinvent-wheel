@@ -95,6 +95,11 @@ struct webapp_s {
 
 	int midware_num;
 	webapp_handler_t* midware;
+
+	bool group;
+	char* group_pattern;
+	int group_midware_num;
+	webapp_handler_t* group_midware;
 };
 
 struct webapp_list_node_s {

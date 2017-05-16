@@ -55,7 +55,9 @@ void webapp_destroy(webapp_t* web);
 int webapp_run(webapp_t* web, const char* host);
 
 webapp_t* webapp_use(webapp_t* web, webapp_handler_t handler);
-webapp_t* webapp_group(webapp_t* web, const char* pattern);
+
+webapp_t* webapp_group_begin(webapp_t* web, const char* pattern);
+webapp_t* webapp_group_end(webapp_t* web);
 
 webapp_t* webapp_get(webapp_t* web, const char* pattern, ...);
 webapp_t* webapp_post(webapp_t* web, const char* pattern, ...);

@@ -19,7 +19,8 @@ route_t* route_new(void* data)
     r->data = data;
     return r;
 }
-static int route_destroy_node(route_node_t* node) {
+static int route_destroy_node(route_node_t* node)
+ {
     if(!node) return 0;
     if(node->nodes_num == 0) {
         if(node->handlers) free(node->handlers);
@@ -63,15 +64,33 @@ static int route_add_handlers(webapp_handler_t handler, va_list ap,
 }
 int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
 {
+        if(!route || !handler || !path || strlen(path) == 0 || path[0] != '/') return -1;
+
+        va_list ap;
+        va_start(ap, handler);
+        int num = 0;
+        webapp_handler_t* handlers = NULL;
+        route_add_handlers(handler, ap, &num, &handlers);
+        va_end(ap);
+
+        int rv = route_add_group(route, path, num, handlers);
+
+        if(handlers) free(handlers);
+
+        return rv;
+}
+int route_add_group(route_t* route, const char* path, int num, webapp_handler_t* handler)
+{
     if(!route || !handler || !path || strlen(path) == 0 || path[0] != '/') return -1;
 
     if (path[1] == 0) {
         if (route->handlers) free(route->handlers);       
 
-        va_list ap;
-        va_start(ap, handler);
-        route_add_handlers(handler, ap, &(route->handlers_num), &(route->handlers));
-        va_end(ap);
+        route->handlers_num = num;
+        if(num > 0) {
+            route->handlers = calloc(num, sizeof(webapp_handler_t));
+            memcpy(route->handlers, handler, num*sizeof(webapp_handler_t));
+        }
 
         return 0;
     }
@@ -143,7 +162,7 @@ int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
                     if(t->type == NODE_TYPE_NONE && i == vec_path_num - 1) {
                         node = t;
                         node->type = NODE_TYPE_ABS;
-                        if(node->handlers) free(node->handlers_num);
+                        if(node->handlers) free(node->handlers);
                         node->handlers_num = 0;
                         cont = true;
                         break;
@@ -189,10 +208,11 @@ int route_add(route_t* route, const char* path, webapp_handler_t handler, ...)
 
     node->tsr = tsr;
 
-    va_list ap;
-    va_start(ap, handler);
-    route_add_handlers(handler, ap, &(node->handlers_num), &(node->handlers));
-    va_end(ap);
+    node->handlers_num = num;
+    if(num > 0) {
+        node->handlers = calloc(num, sizeof(webapp_handler_t));
+        memcpy(node->handlers, handler, num*sizeof(webapp_handler_t));
+    }
 
     return 0;
 }
@@ -301,7 +321,7 @@ static void print_hanlders(int num, webapp_handler_t* handlers)
 
 static void route_walk_node(const char* prefix, route_node_t* node)
 {
-    if (!node) return 0;
+    if (!node) return;
     if (node->handlers_num) {
         printf("%s%s", prefix, node->path);
         if (node->tsr)
