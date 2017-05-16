@@ -52,7 +52,7 @@ int webapp_task_process(webapp_thread_t* t)
 {
     webapp_list_node_t* item = NULL;
     list_for_each(&t->read_queue, item, node) {
-        connection_t* con = (connection_t*)item->data;
+        //connection_t* con = (connection_t*)item->data;
         debug("fd(%d) receive data\n", con->fd);
     }
     return 0;

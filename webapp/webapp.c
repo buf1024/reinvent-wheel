@@ -168,7 +168,7 @@ webapp_t* webapp_new()
     }
 
     running = true;
-    if (pthread_create(&web->job_tid, NULL, job_thread, NULL) < 0){
+    if (pthread_create(&web->job_tid, NULL, job_thread, web) < 0){
 		debug("low level job create failed.\n");
 		running = false;
 		goto ERR;
