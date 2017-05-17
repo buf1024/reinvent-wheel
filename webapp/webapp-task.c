@@ -41,6 +41,8 @@ int webapp_task_read(webapp_thread_t* t)
                 // TODO read connection
                 webapp_list_node_t* n = calloc(1, sizeof(*n));
                 n->data = con;
+
+                debug("fd(%d) add to list tail.\n", con->fd);
                 list_add_tail(&(t->read_queue), &(n->node));
             }
         }
@@ -50,10 +52,12 @@ int webapp_task_read(webapp_thread_t* t)
 
 int webapp_task_process(webapp_thread_t* t)
 {
-    webapp_list_node_t* item = NULL;
-    list_for_each(&t->read_queue, item, node) {
-        //connection_t* con = (connection_t*)item->data;
-        //debug("fd(%d) receive data\n", con->fd);
+    webapp_list_node_t* it = NULL;
+    webapp_list_node_t* nxt = NULL; 
+    list_for_each_safe(&t->read_queue, it, nxt, node) {
+        connection_t* con = (connection_t*)it->data;
+        debug("fd(%d) receive data\n", con->fd);
+        list_del(&(it->node));
     }
     return 0;
 }

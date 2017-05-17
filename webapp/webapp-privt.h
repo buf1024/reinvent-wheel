@@ -13,6 +13,7 @@
 #include <netinet/tcp.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdarg.h>
 
 #include "webapp.h"
 #include "webapp-route.h"
@@ -21,10 +22,23 @@
 #include "list.h"
 
 #ifdef DEBUG
-#  define debug printf
+static void _debug(const char* fmt, ...)
+{
+    struct timeval tv = { 0 };
+    gettimeofday(&tv, NULL);
+    struct tm* tm = localtime(&tv.tv_sec);
+    printf("[D][%02d%02d%02d:%ld] ",
+        tm->tm_hour, tm->tm_min, tm->tm_sec, (long)tv.tv_usec);
+	va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+}
 #else
-#  define debug (void)
+static void _debug(){}
 #endif
+
+#define debug(...) _debug(__VA_ARGS__)
 
 #define DEFAULT_LISTEN_BACK_LOG  128
 
@@ -48,8 +62,10 @@ enum {
 struct connection_s
 {
 	int fd;
-	int type;
+	//int type;
 	int state;
+
+	time_t up_time;
 
 	buffer_t* rbuf;
 	buffer_t* wbuf;
