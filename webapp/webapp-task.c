@@ -5,6 +5,7 @@ int webapp_task_read(webapp_thread_t* t)
     webapp_t* web = t->web;
     int rv = epoll_wait(t->epfd, t->evts, t->nfd, 100);
     if (rv == 0) {
+        debug("wroker thread epoll_wait timeout\n");
     } else if (rv < 0) {
         //if (t->http->sig_term || t->http->sig_usr1 || t->http->sig_usr2) {
         //	continue;
@@ -53,7 +54,7 @@ int webapp_task_process(webapp_thread_t* t)
     webapp_list_node_t* item = NULL;
     list_for_each(&t->read_queue, item, node) {
         //connection_t* con = (connection_t*)item->data;
-        debug("fd(%d) receive data\n", con->fd);
+        //debug("fd(%d) receive data\n", con->fd);
     }
     return 0;
 }

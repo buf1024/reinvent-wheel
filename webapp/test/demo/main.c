@@ -19,8 +19,8 @@ int main()
     HEAD(web, "/head", handler);
     OPTIONS(web, "/option", handler);
 
-    printf("webapp running at:*8080");
-    webapp_run(web, "*:8080");
+    printf("webapp running at:*8080\n");
+    webapp_run(web, "*:8080", 0);
 
     webapp_destroy(web);
 }

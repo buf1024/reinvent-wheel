@@ -1,12 +1,4 @@
-/*
- * sock.h
- *
- *  Created on: 2016/6/7
- *      Author: Luo Guochun
- */
-
-#ifndef __SOCK_H__
-#define __SOCK_H__
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -42,18 +34,7 @@ int tcp_ipv6only(int fd, bool on);
 int tcp_set_send_buffer(int fd, int buffsize);
 int tcp_set_recv_buffer(int fd, int buffsize);
 
-// unix domain
-int unix_domain_server(char *path, mode_t perm, int backlog);
-int unix_domain_accept(int serversock);
-int unix_domain_connect(char *path);
-int unix_domain_noblock_connect(char *path);
-/*fd generated from socketpair function call*/
-ssize_t unix_domain_send_fd(int fd,/* void* ptr, size_t nbytes, */int sendfd);
-ssize_t unix_domain_recv_fd(int fd,/* void* ptr, size_t nbytes, */int* recvfd);
-
 #ifdef __cplusplus
 }
 #endif
 
-
-#endif /* __SOCK_H__ */

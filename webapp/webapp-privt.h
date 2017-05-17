@@ -1,7 +1,6 @@
 #pragma once
 
 #define _GNU_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,7 +26,6 @@
 #  define debug (void)
 #endif
 
-#define DEFAULT_LISTEN_HOST      "127.0.0.1:8080"
 #define DEFAULT_LISTEN_BACK_LOG  128
 
 typedef struct list_head webapp_list_t;
@@ -80,12 +78,14 @@ struct webapp_thread_s
 struct webapp_s {
 	int   thread_num;
     webapp_thread_t* threads;
+
 	size_t nfd;
     connection_t* conns;
 
 	int epfd;
 	struct epoll_event* evts;
     int main_fd;
+
     route_t* route[HTTP_METHODS];
 
 	pthread_barrier_t* barrier;

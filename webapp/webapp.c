@@ -55,7 +55,7 @@ static void* job_thread(void *data)
         struct timeval now;
         gettimeofday(&now, NULL);
         struct timespec rgtp = { now.tv_sec + job_wait_sec, now.tv_usec * 1000 };
-
+		debug("job thread sleep for %d seconds\n", job_wait_sec);
         pthread_cond_timedwait(&job_wait_cond, &job_wait_mutex, &rgtp);
 
     }
@@ -69,8 +69,8 @@ static void* work_thread(void* data)
 	webapp_thread_t* t = (webapp_thread_t*)data;
 	webapp_t* web = t->web;
 	// todo things to wait
+    debug("work thread(%ld) wait for start.\n", t->tid);
 	pthread_barrier_wait(web->barrier);
-    debug("work thread(%ld) loop start.\n", t->tid);
 	
 	for (;;) {
 		if(webapp_task_read(t) != 0) {
@@ -163,9 +163,13 @@ webapp_t* webapp_new()
         if (pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE) != 0) {
             debug("pthread_attr_setdetachstate failed.\n");
         }
+		list_head_init(&(t->read_queue));
+		list_head_init(&(t->write_queue));
 
         pthread_create(&t->tid, &attr, work_thread, t);
     }
+
+	list_head_init(&(web->job_queue));
 
     running = true;
     if (pthread_create(&web->job_tid, NULL, job_thread, web) < 0){
@@ -217,47 +221,101 @@ void webapp_destroy(webapp_t* web)
 
 }
 
-int webapp_run(webapp_t* web, const char* host)
+static int webapp_free_hosts(int num, char** hosts, int* ports)
 {
-    if (!web) return -1;
-    if (host == NULL || strlen(host) == 0) {
-        host = DEFAULT_LISTEN_HOST;
-    }
-    // host:port
-    char* listen = NULL;
-    int port = 0;
+	for(int i=0; i<num; i++) {
+		free(hosts[i]);
+	}
+	free(hosts);
+	free(ports);
+	return 0;
+}
 
-    int fd = tcp_server(listen, port, DEFAULT_LISTEN_BACK_LOG);
-
-    if (fd <= 0) {
-        debug("listen server failed, host=%s, port=%d\n", listen, port);
+int webapp_run(webapp_t* web, const char* host, ...)
+{
+    if (!web || web->barrier == NULL)
+        return -1;
+    if (host == NULL || host[0] == 0) {
         return -1;
     }
-    debug("listening ip=%s, port=%d\n", listen, port);
 
-    tcp_reuse_addr(fd, true);
-    tcp_noblock(fd, true);
+	int count = 0;
+    char** hosts = NULL;
+    int* ports = NULL;
 
-    struct linger linger = { 1, 1 };
-    setsockopt(fd, SOL_SOCKET, SO_LINGER, (void*)&linger, (socklen_t)sizeof(struct linger));
-    int fastopen_opt = 5;
-    setsockopt(fd, SOL_TCP, TCP_FASTOPEN, (void*)&fastopen_opt, (socklen_t)sizeof(int));
-    int quick_ack = 0;
-    setsockopt(fd, SOL_TCP, TCP_QUICKACK, (void*)&quick_ack, (socklen_t)sizeof(int));
+    char* sep = strstr(host, ":");
+    if (!sep || *(sep + 1) == 0) return -1;
+    
+	hosts = calloc(1, sizeof(char*));
+	ports = calloc(1, sizeof(int));
+	hosts[count] = calloc(1, sep - host + 1);
+    memcpy(hosts[count], host, sep - host);
+    ports[count] = atoi(sep + 1);
 
-    connection_t* con = &web->conns[fd];
-    con->fd = fd;
-    if (epoll_add_fd(web->epfd, EPOLLIN, con) != 0) {
-        debug("epoll add failed.\n");
-        return -1;
+	count++;
+
+    va_list ap;
+    va_start(ap, host);
+    while (1) {
+        const char* h = va_arg(ap, const char*);
+        if (h == NULL)
+            break;
+
+        char* sep = strstr(h, ":");
+        if (!sep || *(sep + 1) == 0)
+            return -1;
+		
+		
+		
+		hosts = realloc(hosts, (count + 1)*sizeof(char*));
+		ports = realloc(ports, (count + 1)*sizeof(int));
+		
+		hosts[count] = calloc(1, sep - h + 1);
+        memcpy(hosts[count], h, sep - h);
+        ports[count] = atoi(sep + 1);
+		count++;		
     }
-    web->nfd++;
-	if(web->evts) {
-		web->evts = (struct epoll_event*)realloc(web->evts, web->nfd*sizeof(struct epoll_event));
-		if(!web->evts) {
-			debug("realloc epoll events failed.\n");
+    va_end(ap);
+
+    for (int i = 0; i < count; i++) {
+        int fd = tcp_server(hosts[i], ports[i], DEFAULT_LISTEN_BACK_LOG);
+
+        if (fd <= 0) {
+            debug("listen server failed, host=%s, port=%d\n", hosts[i], ports[i]);
+            webapp_free_hosts(count, hosts, ports);
 			return -1;
-		}
+        }
+        debug("listening ip=%s, port=%d\n", hosts[i], ports[i]);
+
+        tcp_reuse_addr(fd, true);
+        tcp_noblock(fd, true);
+
+        struct linger linger = { 1, 1 };
+        setsockopt(fd, SOL_SOCKET, SO_LINGER, (void*)&linger, (socklen_t)sizeof(struct linger));
+        int fastopen_opt = 5;
+        setsockopt(fd, SOL_TCP, TCP_FASTOPEN, (void*)&fastopen_opt, (socklen_t)sizeof(int));
+        int quick_ack = 0;
+        setsockopt(fd, SOL_TCP, TCP_QUICKACK, (void*)&quick_ack, (socklen_t)sizeof(int));
+
+        connection_t* con = &web->conns[fd];
+        con->fd = fd;
+        if (epoll_add_fd(web->epfd, EPOLLIN, con) != 0) {
+            debug("epoll add failed.\n");
+            webapp_free_hosts(count, hosts, ports);
+            return -1;
+        }
+    }
+
+    webapp_free_hosts(count, hosts, ports);
+
+    web->nfd = count;
+	web->evts = (struct epoll_event*)calloc(web->nfd, sizeof(struct epoll_event));
+	if(!web->evts) {
+		debug("realloc epoll events failed.\n");
+		return -1;
+	}
+	if(!web->barrier) {
+		return 0;
 	}
 
 	pthread_barrier_wait(web->barrier);
@@ -273,7 +331,7 @@ int webapp_run(webapp_t* web, const char* host)
 			continue;
 		}else if(rv < 0) {
 			// todo signal			
-			debug("epoll_wait error, errno=%d\n", errno);
+			debug("epoll_wait error, errno=%d, errstr=%s\n", errno, strerror(errno));
 			break;
 		} else {
 			for (int i = 0; i < rv; i++) {

@@ -1,6 +1,4 @@
-
-#ifndef _WEBAPP_H_
-#define _WEBAPP_H_
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,7 +50,7 @@ struct webapp_context_s {
 webapp_t* webapp_new();
 void webapp_destroy(webapp_t* web);
 
-int webapp_run(webapp_t* web, const char* host);
+int webapp_run(webapp_t* web, const char* host, ...);
 
 webapp_t* webapp_use(webapp_t* web, webapp_handler_t handler);
 
@@ -65,10 +63,3 @@ webapp_t* webapp_put(webapp_t* web, const char* pattern, ...);
 webapp_t* webapp_delete(webapp_t* web, const char* pattern, ...);
 webapp_t* webapp_head(webapp_t* web, const char* pattern, ...);
 webapp_t* webapp_options(webapp_t* web, const char* pattern, ...);
-
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif //_WEBAPP_H_
