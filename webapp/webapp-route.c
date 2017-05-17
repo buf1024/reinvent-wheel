@@ -58,7 +58,7 @@ static int route_add_handlers(webapp_handler_t handler, va_list ap,
 
         (*handlers_num)++;
         (*handlers) = realloc((*handlers), (*handlers_num) * sizeof(webapp_handler_t));
-        handlers[(*handlers_num) - 1] = h;
+        (*handlers)[(*handlers_num) - 1] = h;
     }
     return 0;
 }
@@ -95,11 +95,9 @@ int route_add_group(route_t* route, const char* path, int num, webapp_handler_t*
         return 0;
     }
 
-    enum route_note_type_t type = NODE_TYPE_NONE;
-
     bool tsr = false;
     char vec_path[ROUTE_MAX_DEPTH][ROUTE_MAX_PATH] = {0};
-    int vec_path_num = split(path+1, '/', vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
+    int vec_path_num = split(path+1, '/', (char**)vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
     if(vec_path_num > 0 && vec_path[vec_path_num - 1][0] == 0) {
         vec_path_num--;
         tsr = true;
@@ -230,7 +228,7 @@ route_info_t* route_get(route_t* route, const char* path)
     }
 
     char vec_path[ROUTE_MAX_DEPTH][ROUTE_MAX_PATH] = {0};
-    int vec_path_num = split(path+1, '/', vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
+    int vec_path_num = split(path+1, '/', (char**)vec_path, ROUTE_MAX_PATH, ROUTE_MAX_DEPTH);
     if(vec_path_num > 0 && vec_path[vec_path_num - 1][0] == 0) {
         vec_path_num--;
     }
@@ -315,7 +313,7 @@ static void print_hanlders(int num, webapp_handler_t* handlers)
     if(num <= 0) return;
     printf("  --  ");
     for(int i=0; i<num; i++) {
-        printf("%d#0x%x\n", i+1, (unsigned)handlers[i]);
+        printf("%d#%ld\n", i+1, (unsigned long)handlers[i]);
     }
 }
 

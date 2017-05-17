@@ -327,7 +327,7 @@ int webapp_run(webapp_t* web, const char* host, ...)
 
 		int rv = epoll_wait(web->epfd, web->evts, web->nfd, 100);
 		if(rv == 0) {
-			debug("main_timer_task failed.\n");
+			//debug("main_timer_task failed.\n");
 			continue;
 		}else if(rv < 0) {
 			// todo signal			

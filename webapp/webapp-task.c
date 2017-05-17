@@ -5,7 +5,7 @@ int webapp_task_read(webapp_thread_t* t)
     webapp_t* web = t->web;
     int rv = epoll_wait(t->epfd, t->evts, t->nfd, 100);
     if (rv == 0) {
-        debug("wroker thread epoll_wait timeout\n");
+        //debug("wroker thread epoll_wait timeout\n");
     } else if (rv < 0) {
         //if (t->http->sig_term || t->http->sig_usr1 || t->http->sig_usr2) {
         //	continue;
@@ -15,8 +15,7 @@ int webapp_task_read(webapp_thread_t* t)
     } else {
         for (int i = 0; i < rv; i++) {
             struct epoll_event* ev = &(t->evts[i]);
-            int fd = (int)ev->data.ptr;
-            connection_t* con = &(web->conns[fd]);
+            connection_t* con = (connection_t*)ev->data.ptr;
 
             if (con->fd == t->fd[0]) {
                 intptr_t ptr = 0;
@@ -33,7 +32,7 @@ int webapp_task_read(webapp_thread_t* t)
                 con = &(web->conns[fd]);
                 con->fd = fd;
 
-                if (epoll_add_fd(t->epfd, EPOLLIN, fd) < 0) {
+                if (epoll_add_fd(t->epfd, EPOLLIN, con) < 0) {
                     debug("epoll_add_fd failed.\n");
                     close(fd);
                     continue;

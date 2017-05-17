@@ -186,45 +186,6 @@ static int tcp_generic_connect(char *addr, int port, bool noblock) {
 	return s;
 }
 
-static int tcp_create_socket(int domain) {
-	int s;
-	if ((s = socket(domain, SOCK_STREAM, 0)) == -1) {
-		printf("creating socket: %s", strerror(errno));
-		return -1;
-	}
-
-	/* Make sure connection-intensive things like the redis benchmark
-	 * will be able to close/open sockets a zillion of times */
-	if (tcp_reuse_addr(s, true) == -1) {
-		close(s);
-		return -1;
-	}
-	return s;
-}
-static int unix_doman_generic_connect(char *path, bool noblock) {
-	int s;
-	struct sockaddr_un sa;
-
-	if ((s = tcp_create_socket(AF_LOCAL)) == -1)
-		return -1;
-
-	sa.sun_family = AF_LOCAL;
-	strncpy(sa.sun_path, path, sizeof(sa.sun_path) - 1);
-	if (noblock) {
-		if (tcp_noblock(s, true) != 0)
-			return -1;
-	}
-	if (connect(s, (struct sockaddr*) &sa, sizeof(sa)) == -1) {
-		if (errno == EINPROGRESS && noblock)
-			return s;
-
-		printf("connect: %s", strerror(errno));
-		close(s);
-		return -1;
-	}
-	return s;
-}
-
 int tcp_resolve(char *host, char *ipbuf, size_t ipbuf_len) {
 	return tcp_generic_resolve(host, ipbuf, ipbuf_len, false);
 }

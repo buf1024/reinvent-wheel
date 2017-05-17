@@ -20,7 +20,7 @@ int main()
     OPTIONS(web, "/option", handler);
 
     printf("webapp running at:*8080\n");
-    webapp_run(web, "*:8080", 0);
+    webapp_run(web, "*:8080", "*:8087", 0);
 
     webapp_destroy(web);
 }
